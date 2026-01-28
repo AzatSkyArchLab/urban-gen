@@ -19,11 +19,12 @@ export interface BBox {
 export interface FeatureProperties {
   id?: string;
   name?: string;
+  type?: string;
+  selected?: boolean;
   [key: string]: any;
 }
 
 export type UrbanFeature = Feature<Geometry, FeatureProperties>;
-
 export type UrbanFeatureCollection = FeatureCollection<Geometry, FeatureProperties>;
 
 // ============================================

@@ -15,23 +15,13 @@ export interface LayerConfig {
   maxzoom?: number;
 }
 
-export interface SourceConfig {
-  id: string;
-  type: 'geojson' | 'vector';
-  data?: GeoJSON.FeatureCollection | string;
-  tiles?: string[];
-  minzoom?: number;
-  maxzoom?: number;
-}
-
 // ============================================
-// MapManager — управление картой
+// MapManager
 // ============================================
 export class MapManager {
   private map: maplibregl.Map | null = null;
   private containerId: string;
-  private sources = new Map<string, SourceConfig>();
-  private layers = new Map<string, LayerConfig>();
+  private currentBasemap: 'osm' | 'satellite' = 'osm';
 
   constructor(containerId: string) {
     this.containerId = containerId;
@@ -65,41 +55,64 @@ export class MapManager {
     });
   }
 
-    private createBaseStyle(): maplibregl.StyleSpecification {
+  private createBaseStyle(): maplibregl.StyleSpecification {
     return {
-        version: 8,
-        sources: {
+      version: 8,
+      sources: {
         'osm': {
-            type: 'raster',
-            tiles: [Config.map.basemap],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors'
-        }
+          type: 'raster',
+          tiles: [Config.basemaps.osm],
+          tileSize: 256,
+          attribution: '© OpenStreetMap contributors'
         },
-        layers: [
+        'esri-satellite': {
+          type: 'raster',
+          tiles: [Config.basemaps.esriSatellite],
+          tileSize: 256,
+          attribution: '© Esri'
+        }
+      },
+      layers: [
         {
-            id: 'background',
-            type: 'background',
-            paint: {
+          id: 'background',
+          type: 'background',
+          paint: {
             'background-color': Config.map.style.backgroundColor
-            }
+          }
         },
         {
-            id: 'osm-tiles',
-            type: 'raster',
-            source: 'osm',
-            minzoom: 0,
-            maxzoom: 19
+          id: 'osm-tiles',
+          type: 'raster',
+          source: 'osm',
+          minzoom: 0,
+          maxzoom: 19
+        },
+        {
+          id: 'satellite-tiles',
+          type: 'raster',
+          source: 'esri-satellite',
+          minzoom: 0,
+          maxzoom: 19,
+          layout: {
+            'visibility': 'none'
+          }
         }
-        ]
+      ]
     };
-    }
+  }
 
   private setupMapEvents(): void {
     if (!this.map) return;
 
     this.map.on('click', (e) => {
       eventBus.emit('map:click', {
+        lngLat: e.lngLat,
+        point: e.point
+      });
+    });
+
+    this.map.on('dblclick', (e) => {
+      eventBus.emit('map:dblclick', {
         lngLat: e.lngLat,
         point: e.point
       });
@@ -122,37 +135,32 @@ export class MapManager {
   }
 
   // ============================================
-  // Sources — источники данных
+  // Basemap
+  // ============================================
+  setBasemap(type: 'osm' | 'satellite'): void {
+    if (!this.map) return;
+    
+    this.currentBasemap = type;
+    this.map.setLayoutProperty('osm-tiles', 'visibility', type === 'osm' ? 'visible' : 'none');
+    this.map.setLayoutProperty('satellite-tiles', 'visibility', type === 'satellite' ? 'visible' : 'none');
+    eventBus.emit('map:basemap:changed', { type });
+  }
+
+  getBasemap(): 'osm' | 'satellite' {
+    return this.currentBasemap;
+  }
+
+  // ============================================
+  // Sources
   // ============================================
   addGeoJSONSource(id: string, data: GeoJSON.FeatureCollection): void {
     if (!this.map) return;
-
-    this.map.addSource(id, {
-      type: 'geojson',
-      data
-    });
-
-    this.sources.set(id, { id, type: 'geojson', data });
-    eventBus.emit('source:added', { id });
-  }
-
-  addVectorSource(id: string, tiles: string[], options?: { minzoom?: number; maxzoom?: number }): void {
-    if (!this.map) return;
-
-    this.map.addSource(id, {
-      type: 'vector',
-      tiles,
-      minzoom: options?.minzoom ?? 0,
-      maxzoom: options?.maxzoom ?? 16
-    });
-
-    this.sources.set(id, { id, type: 'vector', tiles, ...options });
+    this.map.addSource(id, { type: 'geojson', data });
     eventBus.emit('source:added', { id });
   }
 
   updateGeoJSONSource(id: string, data: GeoJSON.FeatureCollection): void {
     if (!this.map) return;
-
     const source = this.map.getSource(id) as maplibregl.GeoJSONSource;
     if (source) {
       source.setData(data);
@@ -160,51 +168,46 @@ export class MapManager {
     }
   }
 
-  removeSource(id: string): void {
-    if (!this.map || !this.sources.has(id)) return;
-
-    // Сначала удаляем все слои, использующие этот источник
-    this.layers.forEach((layer, layerId) => {
-      if (layer.source === id) {
-        this.removeLayer(layerId);
-      }
-    });
-
-    this.map.removeSource(id);
-    this.sources.delete(id);
-    eventBus.emit('source:removed', { id });
-  }
-
   // ============================================
-  // Layers — слои
+  // Layers
   // ============================================
-    addLayer(config: LayerConfig): void {
+  addLayer(config: LayerConfig): void {
     if (!this.map) return;
 
     this.map.addLayer({
-        id: config.id,
-        type: config.type,
-        source: config.source,
-        paint: config.paint,
-        layout: config.layout ?? {},
-        minzoom: config.minzoom,
-        maxzoom: config.maxzoom
+      id: config.id,
+      type: config.type,
+      source: config.source,
+      paint: config.paint,
+      layout: config.layout ?? {},
+      minzoom: config.minzoom,
+      maxzoom: config.maxzoom
     } as maplibregl.LayerSpecification);
 
-    this.layers.set(config.id, config);
     eventBus.emit('layer:added', { id: config.id });
-    }
-  removeLayer(id: string): void {
-    if (!this.map || !this.layers.has(id)) return;
+  }
 
-    this.map.removeLayer(id);
-    this.layers.delete(id);
-    eventBus.emit('layer:removed', { id });
+  removeLayer(id: string): void {
+    if (!this.map) return;
+    if (this.map.getLayer(id)) {
+      this.map.removeLayer(id);
+      eventBus.emit('layer:removed', { id });
+    }
   }
 
   setLayerVisibility(id: string, visible: boolean): void {
     if (!this.map) return;
     this.map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+  }
+
+  // ============================================
+  // Cursor
+  // ============================================
+  setCursor(cursor: string): void {
+    const container = this.map?.getContainer();
+    if (container) {
+      container.style.cursor = cursor;
+    }
   }
 
   // ============================================
@@ -230,10 +233,7 @@ export class MapManager {
   // Navigation
   // ============================================
   flyTo(center: [number, number], zoom?: number): void {
-    this.map?.flyTo({
-      center,
-      zoom: zoom ?? this.map.getZoom()
-    });
+    this.map?.flyTo({ center, zoom: zoom ?? this.map.getZoom() });
   }
 
   fitBounds(bounds: [[number, number], [number, number]], padding = 50): void {

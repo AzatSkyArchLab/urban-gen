@@ -7,7 +7,34 @@
 </head>
 <body>
   <div id="app">
-    <div id="map"></div>
+    <!-- Left Toolbar -->
+    <div id="toolbar"></div>
+    
+    <!-- Map -->
+    <div id="map-container">
+      <div id="map"></div>
+      <div id="status-bar">
+        <span class="status-item" id="status-coords">0.000, 0.000</span>
+        <span class="status-item" id="status-zoom">Zoom: 14</span>
+        <span class="status-item" id="status-tool">Инструмент: —</span>
+      </div>
+    </div>
+    
+    <!-- Right Sidebar -->
+    <div id="sidebar">
+      <div class="sidebar-header">Слои</div>
+      <div class="sidebar-content">
+        <div class="panel-section">
+          <div class="panel-section-title">Объекты</div>
+          <div id="feature-list" class="feature-list">
+            <div class="empty-state">
+              <div class="empty-state-icon">⬡</div>
+              <div class="empty-state-text">Нет объектов.<br>Нарисуйте полигон.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

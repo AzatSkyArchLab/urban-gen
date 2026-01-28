@@ -1,5 +1,6 @@
 import { eventBus } from './EventBus';
 import { MapManager } from '../map/MapManager';
+import { DrawManager } from '../draw/DrawManager';
 
 // ============================================
 // Types
@@ -48,6 +49,7 @@ export const stateManager = new StateManager();
 // ============================================
 class App {
   private mapManager: MapManager | null = null;
+  private drawManager: DrawManager | null = null;
   private initialized = false;
 
   async init(containerId: string): Promise<void> {
@@ -59,6 +61,8 @@ class App {
     try {
       this.mapManager = new MapManager(containerId);
       await this.mapManager.init();
+
+      this.drawManager = new DrawManager(this.mapManager);
 
       this.setupEventListeners();
       this.initialized = true;
@@ -83,6 +87,10 @@ class App {
 
   getMapManager(): MapManager | null {
     return this.mapManager;
+  }
+
+  getDrawManager(): DrawManager | null {
+    return this.drawManager;
   }
 
   isInitialized(): boolean {
