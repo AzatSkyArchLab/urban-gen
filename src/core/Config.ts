@@ -1,3 +1,7 @@
+/**
+ * Application configuration
+ */
+
 export const Config = {
   map: {
     center: [37.618, 55.751] as [number, number],
@@ -8,10 +12,12 @@ export const Config = {
       backgroundColor: '#ffffff'
     }
   },
+
   basemaps: {
-    osm: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    osm: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
     esriSatellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
   },
+
   cursors: {
     default: 'default',
     pointer: 'pointer',
@@ -19,13 +25,29 @@ export const Config = {
     grab: 'grab',
     grabbing: 'grabbing'
   },
+
   snap: {
     enabled: true,
     tolerance: 10,
     gridSize: 1
   },
+
+  draw: {
+    fillColor: '#3b82f6',
+    fillOpacity: 0.3,
+    lineColor: '#3b82f6',
+    lineWidth: 2,
+    selectedColor: '#f59e0b',
+    selectedWidth: 3,
+    hitboxWidth: 15,
+    previewOpacity: 0.2
+  },
+
   api: {
+    martinBaseUrl: 'https://mdlaba.ru/tiles',
     tileServer: '',
     cfdServer: ''
   }
-};
+} as const;
+
+export type AppConfig = typeof Config;

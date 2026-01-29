@@ -1,32 +1,29 @@
+/**
+ * MapManager - handles MapLibre GL map instance
+ * 
+ * Responsibilities:
+ * - Create and configure map
+ * - Manage basemaps
+ * - Provide source/layer operations
+ * - Emit map events to EventBus
+ */
+
 import maplibregl from 'maplibre-gl';
 import { eventBus } from '../core/EventBus';
 import { Config } from '../core/Config';
 
-// ============================================
-// Types
-// ============================================
-export interface LayerConfig {
-  id: string;
-  type: 'fill' | 'line' | 'circle' | 'symbol';
-  source: string;
-  paint: Record<string, any>;
-  layout?: Record<string, any>;
-  minzoom?: number;
-  maxzoom?: number;
-}
-
-// ============================================
-// MapManager
-// ============================================
 export class MapManager {
   private map: maplibregl.Map | null = null;
-  private containerId: string;
+  private readonly containerId: string;
   private currentBasemap: 'osm' | 'satellite' = 'osm';
 
   constructor(containerId: string) {
     this.containerId = containerId;
   }
 
+  /**
+   * Initialize the map
+   */
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -45,7 +42,9 @@ export class MapManager {
           resolve();
         });
 
-        this.map.on('error', (e) => {
+        this.map.on('error', (e: any) => {
+          // Ignore tile loading errors (normal behavior)
+          if (e.error?.message?.includes('tile') || e.sourceId) return;
           console.error('Map error:', e);
           reject(e);
         });
@@ -76,9 +75,7 @@ export class MapManager {
         {
           id: 'background',
           type: 'background',
-          paint: {
-            'background-color': Config.map.style.backgroundColor
-          }
+          paint: { 'background-color': Config.map.style.backgroundColor }
         },
         {
           id: 'osm-tiles',
@@ -93,9 +90,7 @@ export class MapManager {
           source: 'esri-satellite',
           minzoom: 0,
           maxzoom: 19,
-          layout: {
-            'visibility': 'none'
-          }
+          layout: { visibility: 'none' }
         }
       ]
     };
@@ -105,31 +100,23 @@ export class MapManager {
     if (!this.map) return;
 
     this.map.on('click', (e) => {
-      eventBus.emit('map:click', {
-        lngLat: e.lngLat,
-        point: e.point
-      });
+      eventBus.emit('map:click', { lngLat: e.lngLat, point: e.point });
     });
 
     this.map.on('dblclick', (e) => {
-      eventBus.emit('map:dblclick', {
-        lngLat: e.lngLat,
-        point: e.point
-      });
+      eventBus.emit('map:dblclick', { lngLat: e.lngLat, point: e.point });
     });
 
     this.map.on('mousemove', (e) => {
-      eventBus.emit('map:mousemove', {
-        lngLat: e.lngLat,
-        point: e.point
-      });
+      eventBus.emit('map:mousemove', { lngLat: e.lngLat, point: e.point });
     });
 
     this.map.on('moveend', () => {
+      if (!this.map) return;
       eventBus.emit('map:moveend', {
-        center: this.map!.getCenter(),
-        zoom: this.map!.getZoom(),
-        bounds: this.map!.getBounds()
+        center: this.map.getCenter(),
+        zoom: this.map.getZoom(),
+        bounds: this.map.getBounds()
       });
     });
   }
@@ -139,7 +126,6 @@ export class MapManager {
   // ============================================
   setBasemap(type: 'osm' | 'satellite'): void {
     if (!this.map) return;
-    
     this.currentBasemap = type;
     this.map.setLayoutProperty('osm-tiles', 'visibility', type === 'osm' ? 'visible' : 'none');
     this.map.setLayoutProperty('satellite-tiles', 'visibility', type === 'satellite' ? 'visible' : 'none');
@@ -154,45 +140,32 @@ export class MapManager {
   // Sources
   // ============================================
   addGeoJSONSource(id: string, data: GeoJSON.FeatureCollection): void {
-    if (!this.map) return;
+    if (!this.map || this.map.getSource(id)) return;
     this.map.addSource(id, { type: 'geojson', data });
-    eventBus.emit('source:added', { id });
   }
 
   updateGeoJSONSource(id: string, data: GeoJSON.FeatureCollection): void {
     if (!this.map) return;
     const source = this.map.getSource(id) as maplibregl.GeoJSONSource;
-    if (source) {
-      source.setData(data);
-      eventBus.emit('source:updated', { id });
-    }
+    source?.setData(data);
+  }
+
+  addVectorSource(id: string, tiles: string[], minzoom = 0, maxzoom = 16): void {
+    if (!this.map || this.map.getSource(id)) return;
+    this.map.addSource(id, { type: 'vector', tiles, minzoom, maxzoom });
   }
 
   // ============================================
   // Layers
   // ============================================
-  addLayer(config: LayerConfig): void {
-    if (!this.map) return;
-
-    this.map.addLayer({
-      id: config.id,
-      type: config.type,
-      source: config.source,
-      paint: config.paint,
-      layout: config.layout ?? {},
-      minzoom: config.minzoom,
-      maxzoom: config.maxzoom
-    } as maplibregl.LayerSpecification);
-
-    eventBus.emit('layer:added', { id: config.id });
+  addLayer(spec: maplibregl.LayerSpecification, beforeId?: string): void {
+    if (!this.map || this.map.getLayer(spec.id)) return;
+    this.map.addLayer(spec, beforeId);
   }
 
   removeLayer(id: string): void {
-    if (!this.map) return;
-    if (this.map.getLayer(id)) {
-      this.map.removeLayer(id);
-      eventBus.emit('layer:removed', { id });
-    }
+    if (!this.map || !this.map.getLayer(id)) return;
+    this.map.removeLayer(id);
   }
 
   setLayerVisibility(id: string, visible: boolean): void {
@@ -200,25 +173,50 @@ export class MapManager {
     this.map.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
   }
 
+  setPaintProperty(layerId: string, name: string, value: any): void {
+    if (!this.map) return;
+    this.map.setPaintProperty(layerId, name, value);
+  }
+
+  setFilter(layerId: string, filter: any): void {
+    if (!this.map) return;
+    this.map.setFilter(layerId, filter);
+  }
+
+  moveLayer(id: string, beforeId?: string): void {
+    if (!this.map) return;
+    this.map.moveLayer(id, beforeId);
+  }
+
   // ============================================
   // Cursor
   // ============================================
-    setCursor(cursor: string): void {
-    const container = this.map?.getContainer();
-    if (!container) return;
-    
-    // Remove all cursor classes
-    container.classList.remove(
-        'cursor-default',
-        'cursor-crosshair', 
-        'cursor-pointer',
-        'cursor-grab',
-        'cursor-grabbing'
-    );
-    
-    // Add new cursor class
-    container.classList.add(`cursor-${cursor}`);
-    }
+  setCursor(cursor: string): void {
+    const canvas = this.map?.getCanvas();
+    if (canvas) canvas.style.cursor = cursor;
+  }
+
+  // ============================================
+  // Queries
+  // ============================================
+  queryRenderedFeatures(
+    point: [number, number] | maplibregl.PointLike,
+    options?: { layers?: string[] }
+  ): maplibregl.MapGeoJSONFeature[] {
+    if (!this.map) return [];
+    return this.map.queryRenderedFeatures(point, options);
+  }
+
+  // ============================================
+  // Layer Events
+  // ============================================
+  onLayerEvent(
+    type: 'mouseenter' | 'mouseleave' | 'click',
+    layerId: string,
+    handler: (e: maplibregl.MapLayerMouseEvent) => void
+  ): void {
+    this.map?.on(type, layerId, handler);
+  }
 
   // ============================================
   // Getters
@@ -227,26 +225,29 @@ export class MapManager {
     return this.map;
   }
 
+  getZoom(): number {
+    return this.map?.getZoom() ?? Config.map.zoom;
+  }
+
   getCenter(): maplibregl.LngLat | null {
     return this.map?.getCenter() ?? null;
-  }
-
-  getZoom(): number {
-    return this.map?.getZoom() ?? 0;
-  }
-
-  getBounds(): maplibregl.LngLatBounds | null {
-    return this.map?.getBounds() ?? null;
   }
 
   // ============================================
   // Navigation
   // ============================================
   flyTo(center: [number, number], zoom?: number): void {
-    this.map?.flyTo({ center, zoom: zoom ?? this.map.getZoom() });
+    this.map?.flyTo({ center, zoom });
   }
 
-  fitBounds(bounds: [[number, number], [number, number]], padding = 50): void {
+  fitBounds(bounds: maplibregl.LngLatBoundsLike, padding = 50): void {
     this.map?.fitBounds(bounds, { padding });
+  }
+
+  // ============================================
+  // Utils
+  // ============================================
+  disableDoubleClickZoom(): void {
+    this.map?.doubleClickZoom.disable();
   }
 }

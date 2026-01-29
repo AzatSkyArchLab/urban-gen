@@ -19,10 +19,9 @@ export class Sidebar {
 
   private render(): void {
     this.container.innerHTML = `
-      <div class="sidebar-header">Layers</div>
-      <div class="sidebar-content">
-        <div class="panel-section">
-          <div class="panel-section-title">Features</div>
+      <div class="sidebar-section">
+        <div class="sidebar-header">Features</div>
+        <div class="sidebar-content">
           <div id="feature-list" class="feature-list"></div>
         </div>
       </div>
@@ -32,12 +31,10 @@ export class Sidebar {
   }
 
   private setupEventListeners(): void {
-    // Update list when features change
     eventBus.on('features:changed', () => {
       this.renderFeatureList();
     });
 
-    // Sync selection from map
     eventBus.on('feature:selected', ({ id }: { id: string }) => {
       this.selectedId = id;
       this.renderFeatureList();
@@ -48,9 +45,26 @@ export class Sidebar {
       this.renderFeatureList();
     });
 
-    // Handle clicks on feature items
     this.container.addEventListener('click', (e) => {
-      const item = (e.target as HTMLElement).closest('.feature-item');
+      const target = e.target as HTMLElement;
+      
+      // Delete button
+      const deleteBtn = target.closest('[data-action="delete"]');
+      if (deleteBtn) {
+        const item = deleteBtn.closest('.feature-item') as HTMLElement;
+        const id = item?.dataset.id;
+        if (id) {
+          featureStore.remove(id);
+          if (this.selectedId === id) {
+            this.selectedId = null;
+            eventBus.emit('feature:deselected');
+          }
+        }
+        return;
+      }
+
+      // Item selection
+      const item = target.closest('.feature-item');
       if (!item) return;
 
       const id = item.getAttribute('data-id');
@@ -89,6 +103,12 @@ export class Sidebar {
       <div class="feature-item ${isSelected ? 'selected' : ''}" data-id="${id}">
         <span class="feature-icon">${icon}</span>
         <span class="feature-name">${type} ${index + 1}</span>
+        <button class="feature-delete" data-action="delete" title="Delete">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
       </div>
     `;
   }

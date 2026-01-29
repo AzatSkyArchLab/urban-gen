@@ -1,0 +1,250 @@
+/**
+ * Layer Panel Styles
+ * Include this in main.css or import separately
+ */
+
+/* ============================================
+   Layer Panel
+   ============================================ */
+.layer-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.layer-panel-header {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================
+   Layer Item
+   ============================================ */
+.layer-item {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.layer-item.layer-hidden {
+  opacity: 0.6;
+}
+
+.layer-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: background 0.15s ease;
+}
+
+.layer-item-header:hover {
+  background: var(--bg-secondary);
+}
+
+.layer-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.layer-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.layer-name {
+  flex: 1;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.layer-item-header:hover .layer-actions {
+  opacity: 1;
+}
+
+/* ============================================
+   Layer Buttons
+   ============================================ */
+.layer-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.layer-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.layer-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.visibility-btn {
+  opacity: 1 !important;
+}
+
+.layer-hidden .visibility-btn {
+  color: var(--text-secondary);
+}
+
+.expand-btn.expanded {
+  background: var(--accent-color);
+  color: white;
+}
+
+.expand-btn.expanded:hover {
+  background: var(--accent-hover);
+  color: white;
+}
+
+/* ============================================
+   Layer Settings
+   ============================================ */
+.layer-settings {
+  padding: var(--spacing-sm) var(--spacing-md);
+  padding-left: calc(var(--spacing-md) + 24px + var(--spacing-xs));
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.setting-row label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 50px;
+}
+
+.color-picker {
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
+.width-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-color);
+  border-radius: 2px;
+  outline: none;
+}
+
+.width-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.width-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.width-value {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ============================================
+   Category Legend
+   ============================================ */
+.category-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: var(--spacing-xs);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.legend-line {
+  width: 24px;
+  min-height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  font-size: 11px;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
