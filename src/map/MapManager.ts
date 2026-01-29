@@ -203,12 +203,22 @@ export class MapManager {
   // ============================================
   // Cursor
   // ============================================
-  setCursor(cursor: string): void {
+    setCursor(cursor: string): void {
     const container = this.map?.getContainer();
-    if (container) {
-      container.style.cursor = cursor;
+    if (!container) return;
+    
+    // Remove all cursor classes
+    container.classList.remove(
+        'cursor-default',
+        'cursor-crosshair', 
+        'cursor-pointer',
+        'cursor-grab',
+        'cursor-grabbing'
+    );
+    
+    // Add new cursor class
+    container.classList.add(`cursor-${cursor}`);
     }
-  }
 
   // ============================================
   // Getters

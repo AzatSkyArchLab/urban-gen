@@ -1,262 +1,13 @@
 import { eventBus } from '../core/EventBus';
-import { Config } from '../core/Config';
 import { featureStore } from '../data/FeatureStore';
 import { MapManager } from '../map/MapManager';
-import type { Coordinate, Tool, MapClickEvent, MapMouseEvent, UrbanFeature } from '../types';
+import { BaseTool, IDrawManager } from './BaseTool';
+import { SelectTool } from './tools/SelectTool';
+import { PolygonTool } from './tools/PolygonTool';
+import { LineTool } from './tools/LineTool';
+import type { MapClickEvent, MapMouseEvent, UrbanFeature } from '../types';
 
-// ============================================
-// BaseTool
-// ============================================
-export abstract class BaseTool implements Tool {
-  abstract id: string;
-  abstract name: string;
-  cursor = Config.cursors.default;
-  
-  protected manager: DrawManager;
-  protected isActive = false;
-
-  constructor(manager: DrawManager) {
-    this.manager = manager;
-  }
-
-  activate(): void {
-    this.isActive = true;
-    this.manager.setCursor(this.cursor);
-    eventBus.emit('tool:activated', { id: this.id });
-  }
-
-  deactivate(): void {
-    this.isActive = false;
-    eventBus.emit('tool:deactivated', { id: this.id });
-  }
-
-  onMapClick?(e: MapClickEvent): void;
-  onMapDoubleClick?(e: MapClickEvent): void;
-  onMapMouseMove?(e: MapMouseEvent): void;
-  onKeyDown?(e: KeyboardEvent): void;
-}
-
-// ============================================
-// BaseDrawTool
-// ============================================
-export abstract class BaseDrawTool extends BaseTool {
-  cursor = Config.cursors.crosshair;
-  protected points: Coordinate[] = [];
-  protected tempPoint: Coordinate | null = null;
-
-  activate(): void {
-    super.activate();
-    this.reset();
-  }
-
-  deactivate(): void {
-    super.deactivate();
-    this.reset();
-    this.manager.clearPreview();
-  }
-
-  onMapClick(e: MapClickEvent): void {
-    const coord: Coordinate = [e.lngLat.lng, e.lngLat.lat];
-    this.points.push(coord);
-    this.manager.updatePreview(this.getPreviewGeometry());
-    eventBus.emit('draw:point:added', { point: coord, total: this.points.length });
-  }
-
-  onMapMouseMove(e: MapMouseEvent): void {
-    if (this.points.length === 0) return;
-    this.tempPoint = [e.lngLat.lng, e.lngLat.lat];
-    this.manager.updatePreview(this.getPreviewGeometry());
-  }
-
-  onKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      this.reset();
-      this.manager.clearPreview();
-    } else if (e.key === 'Backspace' && this.points.length > 0) {
-      e.preventDefault();
-      this.points.pop();
-      this.manager.updatePreview(this.getPreviewGeometry());
-    }
-  }
-
-  protected reset(): void {
-    this.points = [];
-    this.tempPoint = null;
-  }
-
-  protected abstract getPreviewGeometry(): GeoJSON.Feature | null;
-  protected abstract complete(): void;
-}
-
-// ============================================
-// SelectTool
-// ============================================
-export class SelectTool extends BaseTool {
-  id = 'select';
-  name = 'Select';
-  cursor = Config.cursors.default;
-
-  onMapClick(e: MapClickEvent): void {
-    const features = this.manager.queryFeaturesAtPoint(e.point);
-    
-    if (features.length > 0) {
-      const id = features[0].properties?.id;
-      if (id) {
-        this.manager.selectFeature(id);
-      }
-    } else {
-      this.manager.clearSelection();
-    }
-  }
-
-  onKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      e.preventDefault();
-      const selectedIds = this.manager.getSelectedIds();
-      selectedIds.forEach(id => featureStore.remove(id));
-      this.manager.clearSelection();
-    } else if (e.key === 'Escape') {
-      this.manager.clearSelection();
-    }
-  }
-}
-
-// ============================================
-// PolygonTool
-// ============================================
-export class PolygonTool extends BaseDrawTool {
-  id = 'polygon';
-  name = 'Polygon';
-  cursor = Config.cursors.crosshair;
-
-  onMapDoubleClick(_e: MapClickEvent): void {
-    if (this.points.length > 0) {
-      this.points.pop();
-    }
-    if (this.points.length >= 3) {
-      this.complete();
-    }
-  }
-
-  onKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Enter' && this.points.length >= 3) {
-      this.complete();
-    } else {
-      super.onKeyDown(e);
-    }
-  }
-
-  protected getPreviewGeometry(): GeoJSON.Feature | null {
-    if (this.points.length === 0) return null;
-
-    const coords = [...this.points];
-    if (this.tempPoint) coords.push(this.tempPoint);
-    if (coords.length < 2) return null;
-
-    if (coords.length < 3) {
-      return {
-        type: 'Feature',
-        properties: {},
-        geometry: { type: 'LineString', coordinates: coords }
-      };
-    }
-
-    return {
-      type: 'Feature',
-      properties: {},
-      geometry: { type: 'Polygon', coordinates: [[...coords, coords[0]]] }
-    };
-  }
-
-  protected complete(): void {
-    if (this.points.length < 3) return;
-
-    const polygon: UrbanFeature = {
-      type: 'Feature',
-      properties: {
-        id: crypto.randomUUID(),
-        type: 'polygon',
-        createdAt: new Date().toISOString()
-      },
-      geometry: {
-        type: 'Polygon',
-        coordinates: [[...this.points, this.points[0]]]
-      }
-    };
-
-    featureStore.add(polygon);
-    eventBus.emit('draw:polygon:complete', polygon);
-    this.reset();
-    this.manager.clearPreview();
-  }
-}
-
-// ============================================
-// LineTool
-// ============================================
-export class LineTool extends BaseDrawTool {
-  id = 'line';
-  name = 'Line';
-  cursor = Config.cursors.crosshair;
-
-  onMapDoubleClick(_e: MapClickEvent): void {
-    if (this.points.length > 0) {
-      this.points.pop();
-    }
-    if (this.points.length >= 2) {
-      this.complete();
-    }
-  }
-
-  onKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Enter' && this.points.length >= 2) {
-      this.complete();
-    } else {
-      super.onKeyDown(e);
-    }
-  }
-
-  protected getPreviewGeometry(): GeoJSON.Feature | null {
-    if (this.points.length === 0) return null;
-
-    const coords = [...this.points];
-    if (this.tempPoint) coords.push(this.tempPoint);
-    if (coords.length < 2) return null;
-
-    return {
-      type: 'Feature',
-      properties: {},
-      geometry: { type: 'LineString', coordinates: coords }
-    };
-  }
-
-  protected complete(): void {
-    if (this.points.length < 2) return;
-
-    const line: UrbanFeature = {
-      type: 'Feature',
-      properties: {
-        id: crypto.randomUUID(),
-        type: 'line',
-        createdAt: new Date().toISOString()
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: [...this.points]
-      }
-    };
-
-    featureStore.add(line);
-    eventBus.emit('draw:line:complete', line);
-    this.reset();
-    this.manager.clearPreview();
-  }
-}
-
-// ============================================
-// DrawManager
-// ============================================
-export class DrawManager {
+export class DrawManager implements IDrawManager {
   private mapManager: MapManager;
   private tools = new Map<string, BaseTool>();
   private activeTool: BaseTool | null = null;
@@ -278,16 +29,22 @@ export class DrawManager {
   }
 
   private init(): void {
+    this.registerTools();
+    this.setupLayers();
+    this.setupEventListeners();
+    this.disableMapDoubleClickZoom();
+    this.activateTool('select');
+  }
+
+  private registerTools(): void {
     this.registerTool(new SelectTool(this));
     this.registerTool(new PolygonTool(this));
     this.registerTool(new LineTool(this));
+  }
+
+  private setupLayers(): void {
     this.setupFeaturesLayer();
     this.setupPreviewLayers();
-    this.setupEventListeners();
-    this.disableMapDoubleClickZoom();
-    
-    // Activate select tool by default
-    this.activateTool('select');
   }
 
   private disableMapDoubleClickZoom(): void {
@@ -422,6 +179,9 @@ export class DrawManager {
     }
   }
 
+  // ============================================
+  // Public API
+  // ============================================
   registerTool(tool: BaseTool): void {
     this.tools.set(tool.id, tool);
   }
@@ -430,21 +190,14 @@ export class DrawManager {
     const tool = this.tools.get(toolId);
     if (!tool) return;
 
-    if (this.activeTool) {
-      this.activeTool.deactivate();
-    }
-    
+    this.activeTool?.deactivate();
     this.activeTool = tool;
     tool.activate();
     eventBus.emit('tool:activate', toolId);
   }
 
   deactivateTool(): void {
-    if (this.activeTool) {
-      this.activeTool.deactivate();
-    }
-    
-    // Switch to select tool
+    this.activeTool?.deactivate();
     const selectTool = this.tools.get('select');
     if (selectTool) {
       this.activeTool = selectTool;
@@ -456,6 +209,9 @@ export class DrawManager {
     return this.activeTool;
   }
 
+  // ============================================
+  // IDrawManager implementation
+  // ============================================
   selectFeature(id: string): void {
     this.selectedIds.clear();
     this.selectedIds.add(id);

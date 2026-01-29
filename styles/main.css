@@ -116,6 +116,34 @@ html, body {
 }
 
 /* ============================================
+   Map Cursor Overrides
+   ============================================ */
+#map.cursor-default,
+#map.cursor-default .maplibregl-canvas-container {
+  cursor: default !important;
+}
+
+#map.cursor-crosshair,
+#map.cursor-crosshair .maplibregl-canvas-container {
+  cursor: crosshair !important;
+}
+
+#map.cursor-pointer,
+#map.cursor-pointer .maplibregl-canvas-container {
+  cursor: pointer !important;
+}
+
+#map.cursor-grab,
+#map.cursor-grab .maplibregl-canvas-container {
+  cursor: grab !important;
+}
+
+#map.cursor-grabbing,
+#map.cursor-grabbing .maplibregl-canvas-container {
+  cursor: grabbing !important;
+}
+
+/* ============================================
    Right Sidebar
    ============================================ */
 #sidebar {
@@ -143,7 +171,6 @@ html, body {
   padding: var(--spacing-md);
 }
 
-/* Panel sections */
 .panel-section {
   margin-bottom: var(--spacing-lg);
 }
@@ -157,7 +184,6 @@ html, body {
   letter-spacing: 0.5px;
 }
 
-/* Feature list */
 .feature-list {
   display: flex;
   flex-direction: column;
@@ -202,7 +228,6 @@ html, body {
   text-overflow: ellipsis;
 }
 
-/* Empty state */
 .empty-state {
   text-align: center;
   padding: var(--spacing-xl);
@@ -220,7 +245,7 @@ html, body {
 }
 
 /* ============================================
-   Status Bar - transparent overlay
+   Status Bar
    ============================================ */
 #status-bar {
   position: absolute;
