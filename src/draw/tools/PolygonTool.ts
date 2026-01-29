@@ -1,7 +1,8 @@
 import { eventBus } from '../../core/EventBus';
 import { Config } from '../../core/Config';
 import { featureStore } from '../../data/FeatureStore';
-import { BaseDrawTool, IDrawManager } from '../BaseTool';
+import { BaseDrawTool } from '../BaseTool';
+import type { IDrawManager } from '../BaseTool';
 import type { MapClickEvent, UrbanFeature } from '../../types';
 
 export class PolygonTool extends BaseDrawTool {

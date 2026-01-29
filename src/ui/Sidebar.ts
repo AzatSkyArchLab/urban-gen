@@ -32,10 +32,12 @@ export class Sidebar {
   }
 
   private setupEventListeners(): void {
+    // Update list when features change
     eventBus.on('features:changed', () => {
       this.renderFeatureList();
     });
 
+    // Sync selection from map
     eventBus.on('feature:selected', ({ id }: { id: string }) => {
       this.selectedId = id;
       this.renderFeatureList();
@@ -46,12 +48,15 @@ export class Sidebar {
       this.renderFeatureList();
     });
 
+    // Handle clicks on feature items
     this.container.addEventListener('click', (e) => {
       const item = (e.target as HTMLElement).closest('.feature-item');
       if (!item) return;
 
       const id = item.getAttribute('data-id');
-      if (id) this.selectFeature(id);
+      if (id) {
+        eventBus.emit('sidebar:feature:click', { id });
+      }
     });
   }
 
@@ -78,7 +83,7 @@ export class Sidebar {
     const id = feature.properties?.id ?? '';
     const isSelected = id === this.selectedId;
     const type = feature.geometry.type;
-    const icon = type === 'Polygon' ? '⬡' : '─';
+    const icon = type === 'Polygon' ? '⬡' : '╱';
     
     return `
       <div class="feature-item ${isSelected ? 'selected' : ''}" data-id="${id}">
@@ -86,9 +91,5 @@ export class Sidebar {
         <span class="feature-name">${type} ${index + 1}</span>
       </div>
     `;
-  }
-
-  private selectFeature(id: string): void {
-    eventBus.emit('sidebar:feature:click', { id });
   }
 }

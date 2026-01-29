@@ -138,6 +138,11 @@ html, body {
   cursor: grab !important;
 }
 
+#map.cursor-grab:active,
+#map.cursor-grab:active .maplibregl-canvas-container {
+  cursor: grabbing !important;
+}
+
 #map.cursor-grabbing,
 #map.cursor-grabbing .maplibregl-canvas-container {
   cursor: grabbing !important;

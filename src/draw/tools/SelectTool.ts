@@ -1,12 +1,13 @@
 import { Config } from '../../core/Config';
 import { featureStore } from '../../data/FeatureStore';
-import { BaseTool, IDrawManager } from '../BaseTool';
+import { BaseTool } from '../BaseTool';
+import type { IDrawManager } from '../BaseTool';
 import type { MapClickEvent } from '../../types';
 
 export class SelectTool extends BaseTool {
   id = 'select';
   name = 'Select';
-  cursor = Config.cursors.default;
+  cursor = 'grab';
 
   constructor(manager: IDrawManager) {
     super(manager);
