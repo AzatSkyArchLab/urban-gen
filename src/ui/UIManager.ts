@@ -15,6 +15,7 @@ import { Toolbar } from './Toolbar';
 import { StatusBar } from './StatusBar';
 import { LayerPanel } from './panels/LayerPanel';
 import { FeaturePanel } from './panels/FeaturePanel';
+import { compassControl } from './CompassControl';
 
 export class UIManager {
   private toolbar: Toolbar | null = null;
@@ -59,6 +60,9 @@ export class UIManager {
     // Status bar (bottom)
     this.statusBar = new StatusBar('status-bar');
     this.statusBar.init();
+
+    // Compass control (map overlay)
+    compassControl.init();
 
     this.initialized = true;
     eventBus.emit('ui:ready');

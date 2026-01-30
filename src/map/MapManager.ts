@@ -33,7 +33,18 @@ export class MapManager {
           center: Config.map.center,
           zoom: Config.map.zoom,
           minZoom: Config.map.minZoom,
-          maxZoom: Config.map.maxZoom
+          maxZoom: Config.map.maxZoom,
+          transformRequest: (url) => {
+            if (url.includes('mdlaba.ru/urban_planning/tiles')) {
+              return {
+                url: url,
+                headers: {
+                  'Authorization': 'Basic ' + btoa(Config.api.martinAuth)
+                }
+              };
+            }
+            return { url };
+          }
         });
 
         this.map.on('load', () => {
@@ -242,6 +253,21 @@ export class MapManager {
 
   fitBounds(bounds: maplibregl.LngLatBoundsLike, padding = 50): void {
     this.map?.fitBounds(bounds, { padding });
+  }
+
+  // ============================================
+  // Bearing (rotation)
+  // ============================================
+  getBearing(): number {
+    return this.map?.getBearing() ?? 0;
+  }
+
+  resetBearing(): void {
+    this.map?.easeTo({ bearing: 0, duration: 300 });
+  }
+
+  onRotate(handler: () => void): void {
+    this.map?.on('rotate', handler);
   }
 
   // ============================================

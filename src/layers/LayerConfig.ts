@@ -121,7 +121,7 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
 ];
 
 export function getTileUrl(sourceLayer: string): string {
-  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}.pbf`;
+  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}`;
 }
 
 export function getCategoryColorExpression(
