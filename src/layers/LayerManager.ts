@@ -85,6 +85,13 @@ export class LayerManager {
         0,
         22
       );
+
+      // Listen for source data errors
+      map.on('error', (e: any) => {
+        if (e.sourceId === config.sourceId) {
+          console.error(`Tile load error for ${config.sourceId}:`, e.error?.message || e);
+        }
+      });
     }
 
     // Build and add layer

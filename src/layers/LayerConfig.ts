@@ -121,9 +121,8 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
 ];
 
 export function getTileUrl(sourceLayer: string): string {
-  // Use URL-based auth to avoid CORS preflight issues with Authorization header
-  const baseUrl = Config.api.martinBaseUrl.replace('https://', `https://${Config.api.martinAuth}@`);
-  return `${baseUrl}/${sourceLayer}/{z}/{x}/{y}`;
+  // transformRequest in MapManager handles authentication
+  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}`;
 }
 
 export function getCategoryColorExpression(
