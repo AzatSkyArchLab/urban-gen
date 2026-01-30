@@ -30,6 +30,19 @@ const ICONS = {
 // ============================================
 // Tool Configuration
 // ============================================
+interface ToolConfig {
+  id: string;
+  icon: string;
+  tooltip: string;
+  shortcut: string;
+}
+
+const TOOLS: ToolConfig[] = [
+  { id: 'select', icon: ICONS.select, tooltip: 'Select', shortcut: 'V' },
+  { id: 'polygon', icon: ICONS.polygon, tooltip: 'Polygon', shortcut: 'P' },
+  { id: 'line', icon: ICONS.line, tooltip: 'Line', shortcut: 'L' }
+];
+
 export class Toolbar {
   private container: HTMLElement;
   private activeTool: string = 'select';

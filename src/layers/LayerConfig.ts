@@ -85,43 +85,11 @@ export const RED_LINES_STYLE = {
   dasharray: [4, 2] as [number, number]
 };
 
-// Vector layers from Martin server
-export const VECTOR_LAYERS: VectorLayerConfig[] = [
-  {
-    id: 'red-lines',
-    name: 'Red Lines',
-    sourceId: 'martin-red-lines',
-    sourceLayer: 'red_lines',
-    type: 'line',
-    visible: true,
-    order: 100,
-    editable: true,
-    style: {
-      color: RED_LINES_STYLE.color,
-      width: RED_LINES_STYLE.width,
-      dasharray: RED_LINES_STYLE.dasharray
-    }
-  },
-  {
-    id: 'osi-sush',
-    name: 'Road Network (OSI)',
-    sourceId: 'martin-osi-sush',
-    sourceLayer: 'osi_sush',
-    type: 'line',
-    visible: true,
-    order: 90,
-    editable: false,
-    style: {
-      color: '#3b82f6',
-      width: 2
-    },
-    categoryField: 'kl_gp',
-    categoryStyles: OSI_SUSH_STYLES
-  }
-];
+// Пустой массив пока CORS не настроен
+export const VECTOR_LAYERS: VectorLayerConfig[] = [];
 
 export function getTileUrl(sourceLayer: string): string {
-  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}.pbf`;
+  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}`;
 }
 
 export function getCategoryColorExpression(

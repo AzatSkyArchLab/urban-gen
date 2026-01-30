@@ -1,16 +1,16 @@
 /**
- * LayerPanel - UI for vector tile layer management
+ * LayerPanel - UI component for layer management
  * 
  * Features:
  * - Toggle layer visibility
- * - Change layer color and width (editable layers)
- * - Reorder layers
- * - Show category legend (OSI roads)
+ * - Change layer color and width (for editable layers)
+ * - Reorder layers (move up/down)
+ * - Show category legend for osi_sush
  */
 
-import { BasePanel } from '../base/BasePanel';
-import type { LayerManager } from '../../layers/LayerManager';
-import type { VectorLayerConfig } from '../../layers/LayerConfig';
+import { eventBus } from '../core/EventBus';
+import type { LayerManager } from '../layers/LayerManager';
+import type { VectorLayerConfig } from '../layers/LayerConfig';
 
 // ============================================
 // Icons
@@ -42,16 +42,27 @@ const ICONS = {
   </svg>`
 };
 
-export class LayerPanel extends BasePanel {
+// ============================================
+// LayerPanel
+// ============================================
+export class LayerPanel {
+  private container: HTMLElement;
   private layerManager: LayerManager;
-  private expandedLayers = new Set<string>();
+  private expandedLayers: Set<string> = new Set();
 
   constructor(containerId: string, layerManager: LayerManager) {
-    super({ containerId, title: 'Vector Layers' });
+    const el = document.getElementById(containerId);
+    if (!el) throw new Error(`LayerPanel container #${containerId} not found`);
+    this.container = el;
     this.layerManager = layerManager;
   }
 
-  protected render(): void {
+  init(): void {
+    this.render();
+    this.setupEventListeners();
+  }
+
+  private render(): void {
     const layers = this.layerManager.getLayers();
     
     this.container.innerHTML = `
@@ -73,7 +84,9 @@ export class LayerPanel extends BasePanel {
     const isVisible = state.visible;
     const isExpanded = this.expandedLayers.has(config.id);
     const hasCategoryStyles = config.categoryField && config.categoryStyles;
-    const icon = config.sourceLayer.includes('osi') ? ICONS.road : ICONS.line;
+    const icon = config.sourceLayer.includes('road') || config.sourceLayer.includes('osi') 
+      ? ICONS.road 
+      : ICONS.line;
 
     return `
       <div class="layer-item ${isVisible ? '' : 'layer-hidden'}" data-layer-id="${config.id}">
@@ -109,12 +122,12 @@ export class LayerPanel extends BasePanel {
     const state = this.layerManager.getLayerState(config.id);
     if (!state) return '';
 
-    // Category legend for OSI roads
+    // If layer has category styles, show legend
     if (config.categoryField && config.categoryStyles) {
       return this.renderCategoryLegend(config);
     }
 
-    // Editable controls
+    // Otherwise show editable controls
     return `
       <div class="layer-settings">
         <div class="setting-row">
@@ -135,7 +148,7 @@ export class LayerPanel extends BasePanel {
     if (!config.categoryStyles) return '';
 
     const legendItems = Object.entries(config.categoryStyles)
-      .map(([_, style]) => `
+      .map(([category, style]) => `
         <div class="legend-item">
           <span class="legend-line" style="background: ${style.color}; height: ${Math.min(style.width, 6)}px;"></span>
           <span class="legend-label">${style.label}</span>
@@ -153,8 +166,8 @@ export class LayerPanel extends BasePanel {
     `;
   }
 
-  protected setupEventListeners(): void {
-    // Click handlers
+  private setupEventListeners(): void {
+    // Handle layer actions
     this.container.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
       if (!btn) return;
@@ -163,10 +176,11 @@ export class LayerPanel extends BasePanel {
       const layerId = layerItem?.dataset.layerId;
       if (!layerId) return;
 
-      this.handleAction(btn.dataset.action!, layerId);
+      const action = btn.dataset.action;
+      this.handleAction(action!, layerId);
     });
 
-    // Input handlers (color, width)
+    // Handle color change
     this.container.addEventListener('input', (e) => {
       const target = e.target as HTMLInputElement;
       const layerItem = target.closest('.layer-item') as HTMLElement;
@@ -179,15 +193,18 @@ export class LayerPanel extends BasePanel {
         const width = parseFloat(target.value);
         this.layerManager.updateStyle(layerId, { width });
         
+        // Update displayed value
         const valueSpan = target.parentElement?.querySelector('.width-value');
-        if (valueSpan) valueSpan.textContent = `${width}px`;
+        if (valueSpan) {
+          valueSpan.textContent = `${width}px`;
+        }
       }
     });
 
     // Re-render on layer changes
-    this.subscribe('layer:visibility:changed', () => this.render());
-    this.subscribe('layer:order:changed', () => this.render());
-    this.subscribe('layer:style:changed', () => this.render());
+    eventBus.on('layer:visibility:changed', () => this.render());
+    eventBus.on('layer:order:changed', () => this.render());
+    eventBus.on('layer:style:changed', () => this.render());
   }
 
   private handleAction(action: string, layerId: string): void {

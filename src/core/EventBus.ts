@@ -8,6 +8,7 @@ type Callback<T = any> = (data: T) => void;
 
 class EventBus {
   private listeners = new Map<string, Set<Callback>>();
+  private onceListeners = new Map<string, Set<Callback>>();
 
   /**
    * Подписка на событие
