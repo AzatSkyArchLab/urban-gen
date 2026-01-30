@@ -9,6 +9,7 @@
 
 import { eventBus } from '../core/EventBus';
 import { app } from '../core/App';
+import { importDialog } from './dialogs/ImportDialog';
 
 // ============================================
 // Icons
@@ -24,6 +25,11 @@ const ICONS = {
     <line x1="5" y1="19" x2="19" y2="5"/>
     <circle cx="5" cy="19" r="2"/>
     <circle cx="19" cy="5" r="2"/>
+  </svg>`,
+  import: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/>
+    <line x1="12" y1="3" x2="12" y2="15"/>
   </svg>`
 };
 
@@ -58,6 +64,10 @@ export class Toolbar {
       <button class="tool-btn" data-tool="line" data-tooltip="Line (L)">
         ${ICONS.line}
       </button>
+      <div class="toolbar-divider"></div>
+      <button class="tool-btn" data-action="import" data-tooltip="Import GeoJSON (I)">
+        ${ICONS.import}
+      </button>
     `;
   }
 
@@ -66,7 +76,14 @@ export class Toolbar {
     this.container.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('.tool-btn') as HTMLElement;
       if (!btn) return;
-      
+
+      // Handle action buttons (import, etc.)
+      const action = btn.dataset.action;
+      if (action === 'import') {
+        importDialog.show();
+        return;
+      }
+
       const tool = btn.dataset.tool;
       if (tool) this.selectTool(tool);
     });
@@ -87,7 +104,13 @@ export class Toolbar {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      
+
+      // Import shortcut
+      if (e.key.toLowerCase() === 'i') {
+        importDialog.show();
+        return;
+      }
+
       const shortcuts: Record<string, string> = {
         'v': 'select',
         'p': 'polygon',

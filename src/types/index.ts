@@ -81,3 +81,8 @@ export interface PanelConfig {
   containerId: string;
   collapsed?: boolean;
 }
+
+// ============================================
+// API Types
+// ============================================
+export * from './api';

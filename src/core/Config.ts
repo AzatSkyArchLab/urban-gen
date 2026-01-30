@@ -45,6 +45,7 @@ export const Config = {
   },
 
   api: {
+    baseUrl: 'https://mdlaba.ru/urban_planning/api',
     martinBaseUrl: 'https://mdlaba.ru/urban_planning/tiles',
     martinAuth: 'urban:urban2026',
     tileServer: '',
