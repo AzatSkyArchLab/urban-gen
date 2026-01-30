@@ -74,18 +74,22 @@ export class LayerManager {
     const state = this.layerStates.get(config.id);
     if (!state) return;
 
+    const tileUrl = getTileUrl(config.sourceLayer);
+    console.log(`Adding layer: ${config.id}, source: ${config.sourceId}, url: ${tileUrl}`);
+
     // Add source if not exists
     if (!map.getSource(config.sourceId)) {
       this.mapManager.addVectorSource(
         config.sourceId,
-        [getTileUrl(config.sourceLayer)],
+        [tileUrl],
         0,
-        16
+        22
       );
     }
 
     // Build and add layer
     const layerSpec = this.buildLayerSpec(config, state);
+    console.log(`Layer spec:`, layerSpec);
     map.addLayer(layerSpec);
 
     eventBus.emit('layer:added', { id: config.id });

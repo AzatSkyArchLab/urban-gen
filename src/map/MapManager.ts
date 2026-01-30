@@ -161,8 +161,9 @@ export class MapManager {
     source?.setData(data);
   }
 
-  addVectorSource(id: string, tiles: string[], minzoom = 0, maxzoom = 16): void {
+  addVectorSource(id: string, tiles: string[], minzoom = 0, maxzoom = 22): void {
     if (!this.map || this.map.getSource(id)) return;
+    console.log(`Adding vector source: ${id}`, tiles);
     this.map.addSource(id, { type: 'vector', tiles, minzoom, maxzoom });
   }
 
