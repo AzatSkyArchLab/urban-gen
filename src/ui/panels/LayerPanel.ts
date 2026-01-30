@@ -11,6 +11,7 @@
 import { BasePanel } from '../base/BasePanel';
 import type { LayerManager } from '../../layers/LayerManager';
 import type { VectorLayerConfig } from '../../layers/LayerConfig';
+import { app } from '../../core/App';
 
 // ============================================
 // Icons
@@ -39,12 +40,23 @@ const ICONS = {
   </svg>`,
   line: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <line x1="5" y1="19" x2="19" y2="5"/>
+  </svg>`,
+  map: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+    <line x1="8" y1="2" x2="8" y2="18"/>
+    <line x1="16" y1="6" x2="16" y2="22"/>
+  </svg>`,
+  satellite: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M2 12h20"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
   </svg>`
 };
 
 export class LayerPanel extends BasePanel {
   private layerManager: LayerManager;
   private expandedLayers = new Set<string>();
+  private currentBasemap: 'osm' | 'satellite' = 'osm';
 
   constructor(containerId: string, layerManager: LayerManager) {
     super({ containerId, title: 'Vector Layers' });
@@ -53,14 +65,38 @@ export class LayerPanel extends BasePanel {
 
   protected render(): void {
     const layers = this.layerManager.getLayers();
-    
+
     this.container.innerHTML = `
       <div class="layer-panel">
+        ${this.renderBasemapSwitcher()}
         <div class="layer-panel-header">
           <span>Vector Layers</span>
         </div>
         <div class="layer-list">
-          ${layers.map(layer => this.renderLayerItem(layer)).join('')}
+          ${layers.length > 0
+            ? layers.map(layer => this.renderLayerItem(layer)).join('')
+            : '<div class="layer-empty">No vector layers available</div>'
+          }
+        </div>
+      </div>
+    `;
+  }
+
+  private renderBasemapSwitcher(): string {
+    return `
+      <div class="basemap-switcher">
+        <div class="basemap-label">Basemap</div>
+        <div class="basemap-options">
+          <button class="basemap-btn ${this.currentBasemap === 'osm' ? 'active' : ''}"
+                  data-basemap="osm" title="OpenStreetMap">
+            ${ICONS.map}
+            <span>Map</span>
+          </button>
+          <button class="basemap-btn ${this.currentBasemap === 'satellite' ? 'active' : ''}"
+                  data-basemap="satellite" title="Satellite">
+            ${ICONS.satellite}
+            <span>Satellite</span>
+          </button>
         </div>
       </div>
     `;
@@ -154,8 +190,17 @@ export class LayerPanel extends BasePanel {
   }
 
   protected setupEventListeners(): void {
-    // Click handlers
+    // Click handlers for layer actions
     this.container.addEventListener('click', (e) => {
+      // Basemap switcher
+      const basemapBtn = (e.target as HTMLElement).closest('[data-basemap]') as HTMLElement;
+      if (basemapBtn) {
+        const basemap = basemapBtn.dataset.basemap as 'osm' | 'satellite';
+        this.setBasemap(basemap);
+        return;
+      }
+
+      // Layer actions
       const btn = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
       if (!btn) return;
 
@@ -188,6 +233,23 @@ export class LayerPanel extends BasePanel {
     this.subscribe('layer:visibility:changed', () => this.render());
     this.subscribe('layer:order:changed', () => this.render());
     this.subscribe('layer:style:changed', () => this.render());
+
+    // Sync basemap state
+    this.subscribe('map:basemap:changed', ({ type }: { type: 'osm' | 'satellite' }) => {
+      this.currentBasemap = type;
+      this.render();
+    });
+  }
+
+  private setBasemap(type: 'osm' | 'satellite'): void {
+    if (this.currentBasemap === type) return;
+
+    const mapManager = app.getMapManager();
+    if (mapManager) {
+      mapManager.setBasemap(type);
+      this.currentBasemap = type;
+      this.render();
+    }
   }
 
   private handleAction(action: string, layerId: string): void {

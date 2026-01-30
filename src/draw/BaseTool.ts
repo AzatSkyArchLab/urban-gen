@@ -19,7 +19,7 @@ export interface IDrawManager {
 export abstract class BaseTool implements Tool {
   abstract id: string;
   abstract name: string;
-  cursor = Config.cursors.default;
+  cursor: string = Config.cursors.default;
   
   protected manager: IDrawManager;
   protected isActive = false;

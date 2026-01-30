@@ -46,6 +46,64 @@
   padding: 8px;
 }
 
+.layer-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Basemap Switcher */
+.basemap-switcher {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.basemap-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.basemap-options {
+  display: flex;
+  gap: 6px;
+}
+
+.basemap-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.basemap-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.basemap-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.basemap-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
 .layer-item {
   background: var(--bg-tertiary);
   border-radius: 6px;
