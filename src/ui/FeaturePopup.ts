@@ -62,17 +62,34 @@ export class FeaturePopup {
     if (!map) return;
 
     const layerIds = this.configs.map(c => c.layerId).filter(id => map.getLayer(id));
+    if (layerIds.length === 0) return;
 
-    // Cursor change on hover (uses layer events for efficiency)
-    for (const layerId of layerIds) {
-      this.mapManager.onLayerEvent('mouseenter', layerId, () => {
+    // Get max hitbox for hover detection
+    const maxHitbox = Math.max(
+      ...this.configs.map(c => c.hitboxSize ?? DEFAULT_HITBOX_SIZE)
+    );
+
+    // Track hover state to avoid excessive cursor changes
+    let isHovering = false;
+
+    // Cursor change on hover using bbox query (same hitbox as click)
+    map.on('mousemove', (e) => {
+      const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
+        [e.point.x - maxHitbox, e.point.y - maxHitbox],
+        [e.point.x + maxHitbox, e.point.y + maxHitbox]
+      ];
+
+      const features = map.queryRenderedFeatures(bbox, { layers: layerIds });
+      const hasFeatures = features.length > 0;
+
+      if (hasFeatures && !isHovering) {
         this.mapManager.setCursor('pointer');
-      });
-
-      this.mapManager.onLayerEvent('mouseleave', layerId, () => {
+        isHovering = true;
+      } else if (!hasFeatures && isHovering) {
         this.mapManager.setCursor('');
-      });
-    }
+        isHovering = false;
+      }
+    });
 
     // Click handler with expanded hitbox using bbox query
     map.on('click', (e) => {
