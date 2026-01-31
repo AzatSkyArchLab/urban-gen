@@ -80,27 +80,30 @@ export class DrawManager implements IDrawManager {
   }
 
   private setupHoverListeners(): void {
-      const map = this.mapManager.getMap();
-      if (!map) return;
+    const map = this.mapManager.getMap();
+    if (!map) return;
 
-      const interactiveLayers = this.featuresLayer.getInteractiveLayers();
-      console.log('Setting up hover for layers:', interactiveLayers);
-      
-      // Единый обработчик для всех слоёв
-      map.on('mousemove', (e) => {
-        if (this.activeTool?.id !== 'select') return;
-        
-        const features = map.queryRenderedFeatures(e.point, {
-          layers: interactiveLayers.filter(id => map.getLayer(id))
-        });
-        
-        if (features.length > 0) {
-          this.setCursor(Config.cursors.pointer);
-        } else {
-          this.setCursor(Config.cursors.grab);
-        }
+    const interactiveLayers = this.featuresLayer.getInteractiveLayers();
+    console.log('Setting up hover for layers:', interactiveLayers);
+
+    // Hover only for drawn features (user's polygons/lines)
+    // Vector tile layers (osi-sush) are handled by FeaturePopup
+    map.on('mousemove', (e) => {
+      if (this.activeTool?.id !== 'select') return;
+
+      const existingLayers = interactiveLayers.filter(id => map.getLayer(id));
+      if (existingLayers.length === 0) return;
+
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: existingLayers
       });
-    }
+
+      if (features.length > 0) {
+        this.setCursor(Config.cursors.pointer);
+      }
+      // Don't reset cursor here - let FeaturePopup handle osi-sush hover
+    });
+  }
 
   registerTool(tool: BaseTool): void {
     this.tools.set(tool.id, tool);
@@ -141,7 +144,6 @@ export class DrawManager implements IDrawManager {
   }
 
   setCursor(cursor: string): void {
-    console.log('Setting cursor:', cursor);
     this.mapManager.setCursor(cursor);
   }
 

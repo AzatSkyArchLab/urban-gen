@@ -10,6 +10,7 @@
 
 import maplibregl from 'maplibre-gl';
 import { eventBus } from '../core/EventBus';
+import { Config } from '../core/Config';
 import type { MapManager } from '../map/MapManager';
 import type { LayerManager } from '../layers/LayerManager';
 
@@ -100,9 +101,8 @@ export class FeaturePopup {
 
     const layerIds = this.getActiveLayerIds();
     if (layerIds.length === 0) {
-      // No layers yet, reset cursor if needed
       if (this.isHovering) {
-        map.getCanvas().style.cursor = '';
+        map.getCanvas().style.cursor = Config.cursors.grab;
         this.isHovering = false;
       }
       return;
@@ -112,10 +112,10 @@ export class FeaturePopup {
     const hasFeatures = features.length > 0;
 
     if (hasFeatures && !this.isHovering) {
-      map.getCanvas().style.cursor = 'pointer';
+      map.getCanvas().style.cursor = Config.cursors.pointer;
       this.isHovering = true;
     } else if (!hasFeatures && this.isHovering) {
-      map.getCanvas().style.cursor = '';
+      map.getCanvas().style.cursor = Config.cursors.grab;
       this.isHovering = false;
     }
   }
