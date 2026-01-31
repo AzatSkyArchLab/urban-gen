@@ -35,7 +35,7 @@ export class MapManager {
           minZoom: Config.map.minZoom,
           maxZoom: Config.map.maxZoom,
           transformRequest: (url) => {
-            if (url.includes('mdlaba.ru/urban_planning/tiles')) {
+            if (url.includes('mdlaba.ru/urbangen/tiles')) {
               return {
                 url: url,
                 headers: {
