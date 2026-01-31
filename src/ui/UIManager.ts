@@ -75,7 +75,7 @@ export class UIManager {
           layerId: 'osi-sush',
           titleField: 'na_obj',
           excludeFields: ['geom', 'id', 'ID'],
-          hitboxSize: 35
+          hitboxSize: 20
         }
       ]);
     }

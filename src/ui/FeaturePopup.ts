@@ -61,8 +61,8 @@ export class FeaturePopup {
     const map = this.mapManager.getMap();
     if (!map) return;
 
-    const layerIds = this.configs.map(c => c.layerId).filter(id => map.getLayer(id));
-    if (layerIds.length === 0) return;
+    // Store layer IDs - don't filter by existence (layers may load later)
+    const configuredLayerIds = this.configs.map(c => c.layerId);
 
     // Get max hitbox for hover detection
     const maxHitbox = Math.max(
@@ -74,6 +74,16 @@ export class FeaturePopup {
 
     // Cursor change on hover using bbox query (same hitbox as click)
     map.on('mousemove', (e) => {
+      // Filter to existing layers at runtime (layers load async)
+      const layerIds = configuredLayerIds.filter(id => map.getLayer(id));
+      if (layerIds.length === 0) {
+        if (isHovering) {
+          this.mapManager.setCursor('');
+          isHovering = false;
+        }
+        return;
+      }
+
       const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
         [e.point.x - maxHitbox, e.point.y - maxHitbox],
         [e.point.x + maxHitbox, e.point.y + maxHitbox]
@@ -93,7 +103,11 @@ export class FeaturePopup {
 
     // Click handler with expanded hitbox using bbox query
     map.on('click', (e) => {
-      this.handleMapClick(e, layerIds);
+      // Filter to existing layers at runtime
+      const layerIds = configuredLayerIds.filter(id => map.getLayer(id));
+      if (layerIds.length > 0) {
+        this.handleMapClick(e, layerIds);
+      }
     });
   }
 
