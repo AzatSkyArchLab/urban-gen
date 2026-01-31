@@ -42,27 +42,27 @@ export interface LayerState {
 
 export const OSI_SUSH_STYLES: Record<string, CategoryStyle> = {
   'Магистральные улицы общегородского значения непрерывного движения': {
-    color: '#dc2626',
-    width: 4,
+    color: '#b91c1c',
+    width: 5,
     label: 'City Highways'
   },
   'Магистральные городские дороги 2-го класса - регулируемого движения': {
-    color: '#ea580c',
-    width: 3.5,
+    color: '#dc2626',
+    width: 4,
     label: 'Urban Roads Class 2'
   },
   'Магистральные улицы общегородского значения 2-го класса - регулируемого движения': {
-    color: '#d97706',
-    width: 3,
+    color: '#ea580c',
+    width: 3.5,
     label: 'City Streets Class 2'
   },
   'Магистральные улицы районного значения': {
-    color: '#ca8a04',
-    width: 2.5,
+    color: '#f97316',
+    width: 3,
     label: 'District Streets'
   },
   'Улицы и дороги местного значения': {
-    color: '#65a30d',
+    color: '#facc15',
     width: 2,
     label: 'Local Streets'
   },
@@ -81,8 +81,7 @@ export const OSI_SUSH_DEFAULT_STYLE: CategoryStyle = {
 
 export const RED_LINES_STYLE = {
   color: '#ef4444',
-  width: 2,
-  dasharray: [4, 2] as [number, number]
+  width: 2
 };
 
 // Vector layers from Martin server
@@ -98,8 +97,7 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
     editable: true,
     style: {
       color: RED_LINES_STYLE.color,
-      width: RED_LINES_STYLE.width,
-      dasharray: RED_LINES_STYLE.dasharray
+      width: RED_LINES_STYLE.width
     }
   },
   {

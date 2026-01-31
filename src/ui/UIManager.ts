@@ -15,12 +15,14 @@ import { Toolbar } from './Toolbar';
 import { StatusBar } from './StatusBar';
 import { LayerPanel } from './panels/LayerPanel';
 import { FeaturePanel } from './panels/FeaturePanel';
+import { FeaturePopup } from './FeaturePopup';
 
 export class UIManager {
   private toolbar: Toolbar | null = null;
   private statusBar: StatusBar | null = null;
   private layerPanel: LayerPanel | null = null;
   private featurePanel: FeaturePanel | null = null;
+  private featurePopup: FeaturePopup | null = null;
   private initialized = false;
 
   /**
@@ -60,6 +62,19 @@ export class UIManager {
     this.statusBar = new StatusBar('status-bar');
     this.statusBar.init();
 
+    // Feature popup for vector layers
+    const mapManager = app.getMapManager();
+    if (mapManager && layerManager) {
+      this.featurePopup = new FeaturePopup(mapManager, layerManager);
+      this.featurePopup.init([
+        {
+          layerId: 'osi-sush',
+          titleField: 'kl_gp',
+          excludeFields: ['geom', 'id']
+        }
+      ]);
+    }
+
     this.initialized = true;
     eventBus.emit('ui:ready');
     console.log('UI initialized');
@@ -82,6 +97,10 @@ export class UIManager {
 
   getFeaturePanel(): FeaturePanel | null {
     return this.featurePanel;
+  }
+
+  getFeaturePopup(): FeaturePopup | null {
+    return this.featurePopup;
   }
 
   get isInitialized(): boolean {

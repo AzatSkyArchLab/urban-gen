@@ -211,8 +211,18 @@ export class LayerPanel extends BasePanel {
       this.handleAction(btn.dataset.action!, layerId);
     });
 
-    // Input handlers (color, width)
+    // Width slider - update display on input (no re-render)
     this.container.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (target.dataset.action !== 'change-width') return;
+
+      const width = parseFloat(target.value);
+      const valueSpan = target.parentElement?.querySelector('.width-value');
+      if (valueSpan) valueSpan.textContent = `${width}px`;
+    });
+
+    // Apply style changes on change event (after drag ends)
+    this.container.addEventListener('change', (e) => {
       const target = e.target as HTMLInputElement;
       const layerItem = target.closest('.layer-item') as HTMLElement;
       const layerId = layerItem?.dataset.layerId;
@@ -223,16 +233,12 @@ export class LayerPanel extends BasePanel {
       } else if (target.dataset.action === 'change-width') {
         const width = parseFloat(target.value);
         this.layerManager.updateStyle(layerId, { width });
-        
-        const valueSpan = target.parentElement?.querySelector('.width-value');
-        if (valueSpan) valueSpan.textContent = `${width}px`;
       }
     });
 
-    // Re-render on layer changes
+    // Re-render on layer changes (except style - handled above)
     this.subscribe('layer:visibility:changed', () => this.render());
     this.subscribe('layer:order:changed', () => this.render());
-    this.subscribe('layer:style:changed', () => this.render());
 
     // Sync basemap state
     this.subscribe('map:basemap:changed', ({ type }: { type: 'osm' | 'satellite' }) => {
