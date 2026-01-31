@@ -122,7 +122,8 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
 
 export function getTileUrl(sourceLayer: string): string {
   // transformRequest in MapManager handles authentication
-  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}.pbf`;
+  // Note: Martin PMTiles serves without .pbf extension
+  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}`;
 }
 
 export function getCategoryColorExpression(
