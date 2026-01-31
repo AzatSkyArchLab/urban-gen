@@ -44,27 +44,47 @@ export const OSI_SUSH_STYLES: Record<string, CategoryStyle> = {
   'Магистральные улицы общегородского значения непрерывного движения': {
     color: '#b91c1c',
     width: 5,
-    label: 'City Highways'
+    label: 'Highways (Continuous)'
   },
-  'Магистральные городские дороги 2-го класса - регулируемого движения': {
+  'Магистральные улицы общегородского значения I класса': {
     color: '#dc2626',
-    width: 4,
-    label: 'Urban Roads Class 2'
+    width: 4.5,
+    label: 'City Streets Class I'
   },
-  'Магистральные улицы общегородского значения 2-го класса - регулируемого движения': {
+  'Магистральные улицы общегородского значения I класса центра': {
+    color: '#dc2626',
+    width: 4.5,
+    label: 'City Streets Class I (Center)'
+  },
+  'Магистральные улицы общегородского значения II класса': {
     color: '#ea580c',
+    width: 4,
+    label: 'City Streets Class II'
+  },
+  'Магистральные улицы общегородского значения II класса центра': {
+    color: '#ea580c',
+    width: 4,
+    label: 'City Streets Class II (Center)'
+  },
+  'Магистральные улицы общегородского значения регулируемого движения': {
+    color: '#f97316',
     width: 3.5,
-    label: 'City Streets Class 2'
+    label: 'City Streets (Regulated)'
   },
   'Магистральные улицы районного значения': {
-    color: '#f97316',
+    color: '#fb923c',
     width: 3,
     label: 'District Streets'
   },
-  'Улицы и дороги местного значения': {
+  'Магистральные улицы районного значения центра': {
+    color: '#fb923c',
+    width: 3,
+    label: 'District Streets (Center)'
+  },
+  'Прочая улично-дорожная сеть Москвы': {
     color: '#facc15',
     width: 2,
-    label: 'Local Streets'
+    label: 'Other Roads'
   },
   'без категории': {
     color: '#9ca3af',
@@ -119,7 +139,7 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
 ];
 
 export function getTileUrl(sourceLayer: string): string {
-  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}.pbf`;
+  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}`;
 }
 
 export function getCategoryColorExpression(
