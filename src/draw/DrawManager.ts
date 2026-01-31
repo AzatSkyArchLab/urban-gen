@@ -83,8 +83,22 @@ export class DrawManager implements IDrawManager {
     const map = this.mapManager.getMap();
     if (!map) return;
 
+    const canvas = map.getCanvas();
     const interactiveLayers = this.featuresLayer.getInteractiveLayers();
     console.log('Setting up hover for layers:', interactiveLayers);
+
+    // Grabbing cursor when dragging (pan)
+    canvas.addEventListener('mousedown', () => {
+      if (this.activeTool?.id === 'select') {
+        this.setCursor(Config.cursors.grabbing);
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (this.activeTool?.id === 'select') {
+        this.setCursor(Config.cursors.grab);
+      }
+    });
 
     // Hover only for drawn features (user's polygons/lines)
     // Vector tile layers (osi-sush) are handled by FeaturePopup

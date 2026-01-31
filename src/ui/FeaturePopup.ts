@@ -3,7 +3,7 @@
  *
  * Features:
  * - Show popup with feature properties on click
- * - Cursor change on hover (pointer)
+ * - Cursor change on hover (pointer) - only when SelectTool is active
  * - Configurable hitbox size for easier selection
  * - Works with vector tile layers
  */
@@ -30,6 +30,8 @@ export class FeaturePopup {
   private configs: PopupConfig[] = [];
   private initialized = false;
   private isHovering = false;
+  private isDragging = false;
+  private currentTool = 'select';
   private maxHitbox = DEFAULT_HITBOX_SIZE;
 
   constructor(mapManager: MapManager, _layerManager: LayerManager) {
@@ -51,6 +53,7 @@ export class FeaturePopup {
 
     this.setupPopup();
     this.setupInteractions();
+    this.setupToolTracking();
 
     this.initialized = true;
     eventBus.emit('popup:initialized');
@@ -62,6 +65,19 @@ export class FeaturePopup {
       closeOnClick: true,
       maxWidth: '320px',
       className: 'feature-popup'
+    });
+  }
+
+  /**
+   * Track active tool to enable/disable cursor management
+   */
+  private setupToolTracking(): void {
+    eventBus.on<string>('tool:activate', (toolId) => {
+      this.currentTool = toolId;
+      // Reset hover state when switching tools
+      if (toolId !== 'select') {
+        this.isHovering = false;
+      }
     });
   }
 
@@ -84,7 +100,18 @@ export class FeaturePopup {
     const map = this.mapManager.getMap();
     if (!map) return;
 
-    // Hover: change cursor when near features
+    const canvas = map.getCanvas();
+
+    // Track drag state to not interfere with pan cursor
+    canvas.addEventListener('mousedown', () => {
+      this.isDragging = true;
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      this.isDragging = false;
+    });
+
+    // Hover: change cursor when near features (only for select tool)
     map.on('mousemove', (e: maplibregl.MapMouseEvent) => {
       this.handleMouseMove(e);
     });
@@ -96,6 +123,12 @@ export class FeaturePopup {
   }
 
   private handleMouseMove(e: maplibregl.MapMouseEvent): void {
+    // Only manage cursor for select tool
+    if (this.currentTool !== 'select') return;
+
+    // Don't interfere with drag/pan cursor
+    if (this.isDragging) return;
+
     const map = this.mapManager.getMap();
     if (!map) return;
 
@@ -121,6 +154,9 @@ export class FeaturePopup {
   }
 
   private handleClick(e: maplibregl.MapMouseEvent): void {
+    // Only show popup for select tool
+    if (this.currentTool !== 'select') return;
+
     const map = this.mapManager.getMap();
     if (!map) return;
 
@@ -250,6 +286,7 @@ export class FeaturePopup {
     this.close();
     this.popup = null;
     this.isHovering = false;
+    this.isDragging = false;
     this.initialized = false;
   }
 }
