@@ -28,7 +28,6 @@ export class FeaturePopup {
   private popup: maplibregl.Popup | null = null;
   private configs: PopupConfig[] = [];
   private initialized = false;
-  private activeLayerIds: string[] = [];
   private isHovering = false;
   private maxHitbox = DEFAULT_HITBOX_SIZE;
 
@@ -50,7 +49,7 @@ export class FeaturePopup {
     );
 
     this.setupPopup();
-    this.waitForLayersAndSetup();
+    this.setupInteractions();
 
     this.initialized = true;
     eventBus.emit('popup:initialized');
@@ -66,33 +65,15 @@ export class FeaturePopup {
   }
 
   /**
-   * Wait for layers to be loaded, then setup interactions
+   * Get layer IDs that currently exist on the map
    */
-  private waitForLayersAndSetup(): void {
+  private getActiveLayerIds(): string[] {
     const map = this.mapManager.getMap();
-    if (!map) return;
+    if (!map) return [];
 
-    const configuredIds = this.configs.map(c => c.layerId);
-
-    const trySetup = () => {
-      // Check which layers actually exist
-      this.activeLayerIds = configuredIds.filter(id => {
-        const layer = map.getLayer(id);
-        return layer !== undefined;
-      });
-
-      if (this.activeLayerIds.length > 0) {
-        this.setupInteractions();
-      }
-    };
-
-    // Try immediately
-    trySetup();
-
-    // Also try after map becomes idle (layers finish loading)
-    if (this.activeLayerIds.length === 0) {
-      map.once('idle', trySetup);
-    }
+    return this.configs
+      .map(c => c.layerId)
+      .filter(id => map.getLayer(id));
   }
 
   /**
@@ -100,47 +81,61 @@ export class FeaturePopup {
    */
   private setupInteractions(): void {
     const map = this.mapManager.getMap();
-    if (!map || this.activeLayerIds.length === 0) return;
+    if (!map) return;
 
     // Hover: change cursor when near features
-    this.setupHoverInteraction(map);
+    map.on('mousemove', (e: maplibregl.MapMouseEvent) => {
+      this.handleMouseMove(e);
+    });
 
     // Click: show popup
-    this.setupClickInteraction(map);
+    map.on('click', (e: maplibregl.MapMouseEvent) => {
+      this.handleClick(e);
+    });
   }
 
-  private setupHoverInteraction(map: maplibregl.Map): void {
-    const onMouseMove = (e: maplibregl.MapMouseEvent) => {
-      const features = this.queryFeaturesAtPoint(map, e.point);
-      const hasFeatures = features.length > 0;
+  private handleMouseMove(e: maplibregl.MapMouseEvent): void {
+    const map = this.mapManager.getMap();
+    if (!map) return;
 
-      if (hasFeatures && !this.isHovering) {
-        map.getCanvas().style.cursor = 'pointer';
-        this.isHovering = true;
-      } else if (!hasFeatures && this.isHovering) {
+    const layerIds = this.getActiveLayerIds();
+    if (layerIds.length === 0) {
+      // No layers yet, reset cursor if needed
+      if (this.isHovering) {
         map.getCanvas().style.cursor = '';
         this.isHovering = false;
       }
-    };
+      return;
+    }
 
-    map.on('mousemove', onMouseMove);
+    const features = this.queryFeaturesAtPoint(map, e.point, layerIds);
+    const hasFeatures = features.length > 0;
+
+    if (hasFeatures && !this.isHovering) {
+      map.getCanvas().style.cursor = 'pointer';
+      this.isHovering = true;
+    } else if (!hasFeatures && this.isHovering) {
+      map.getCanvas().style.cursor = '';
+      this.isHovering = false;
+    }
   }
 
-  private setupClickInteraction(map: maplibregl.Map): void {
-    const onClick = (e: maplibregl.MapMouseEvent) => {
-      const features = this.queryFeaturesAtPoint(map, e.point);
+  private handleClick(e: maplibregl.MapMouseEvent): void {
+    const map = this.mapManager.getMap();
+    if (!map) return;
 
-      if (features.length === 0) return;
+    const layerIds = this.getActiveLayerIds();
+    if (layerIds.length === 0) return;
 
-      const feature = features[0];
-      const config = this.configs.find(c => c.layerId === feature.layer?.id);
+    const features = this.queryFeaturesAtPoint(map, e.point, layerIds);
+    if (features.length === 0) return;
 
-      if (config) {
-        this.showPopup(e.lngLat, feature, config);
-      }
-    };
+    const feature = features[0];
+    const config = this.configs.find(c => c.layerId === feature.layer?.id);
 
-    map.on('click', onClick);
+    if (config) {
+      this.showPopup(e.lngLat, feature, config);
+    }
   }
 
   /**
@@ -148,16 +143,15 @@ export class FeaturePopup {
    */
   private queryFeaturesAtPoint(
     map: maplibregl.Map,
-    point: maplibregl.Point
+    point: maplibregl.Point,
+    layerIds: string[]
   ): maplibregl.MapGeoJSONFeature[] {
-    if (this.activeLayerIds.length === 0) return [];
-
     const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
       [point.x - this.maxHitbox, point.y - this.maxHitbox],
       [point.x + this.maxHitbox, point.y + this.maxHitbox]
     ];
 
-    return map.queryRenderedFeatures(bbox, { layers: this.activeLayerIds });
+    return map.queryRenderedFeatures(bbox, { layers: layerIds });
   }
 
   private showPopup(
@@ -255,7 +249,6 @@ export class FeaturePopup {
   destroy(): void {
     this.close();
     this.popup = null;
-    this.activeLayerIds = [];
     this.isHovering = false;
     this.initialized = false;
   }
