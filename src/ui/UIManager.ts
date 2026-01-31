@@ -73,8 +73,9 @@ export class UIManager {
       this.featurePopup.init([
         {
           layerId: 'osi-sush',
-          titleField: 'kl_gp',
-          excludeFields: ['geom', 'id']
+          titleField: 'na_obj',
+          excludeFields: ['geom', 'id', 'ID'],
+          hitboxSize: 20
         }
       ]);
     }

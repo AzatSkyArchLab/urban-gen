@@ -16,9 +16,11 @@ export interface PopupConfig {
   layerId: string;
   titleField?: string;
   excludeFields?: string[];
+  hitboxSize?: number; // pixels around click point for hit detection
 }
 
 const DEFAULT_EXCLUDE_FIELDS = ['id', 'geom', 'geometry', 'ogc_fid'];
+const DEFAULT_HITBOX_SIZE = 15; // pixels
 
 export class FeaturePopup {
   private mapManager: MapManager;
@@ -59,29 +61,51 @@ export class FeaturePopup {
     const map = this.mapManager.getMap();
     if (!map) return;
 
-    for (const config of this.configs) {
-      // Check if layer exists
-      if (!map.getLayer(config.layerId)) {
-        console.warn(`Layer ${config.layerId} not found for popup`);
-        continue;
-      }
+    const layerIds = this.configs.map(c => c.layerId).filter(id => map.getLayer(id));
 
-      // Cursor change on hover
-      this.mapManager.onLayerEvent('mouseenter', config.layerId, () => {
+    // Cursor change on hover (uses layer events for efficiency)
+    for (const layerId of layerIds) {
+      this.mapManager.onLayerEvent('mouseenter', layerId, () => {
         this.mapManager.setCursor('pointer');
       });
 
-      this.mapManager.onLayerEvent('mouseleave', config.layerId, () => {
+      this.mapManager.onLayerEvent('mouseleave', layerId, () => {
         this.mapManager.setCursor('');
       });
+    }
 
-      // Show popup on click
-      this.mapManager.onLayerEvent('click', config.layerId, (e) => {
-        if (!e.features || e.features.length === 0) return;
+    // Click handler with expanded hitbox using bbox query
+    map.on('click', (e) => {
+      this.handleMapClick(e, layerIds);
+    });
+  }
 
-        const feature = e.features[0];
-        this.showPopup(e.lngLat, feature, config);
-      });
+  private handleMapClick(e: maplibregl.MapMouseEvent, layerIds: string[]): void {
+    const map = this.mapManager.getMap();
+    if (!map) return;
+
+    // Find config with largest hitbox for query
+    const maxHitbox = Math.max(
+      ...this.configs.map(c => c.hitboxSize ?? DEFAULT_HITBOX_SIZE)
+    );
+
+    // Create bbox around click point
+    const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
+      [e.point.x - maxHitbox, e.point.y - maxHitbox],
+      [e.point.x + maxHitbox, e.point.y + maxHitbox]
+    ];
+
+    // Query features in bbox
+    const features = map.queryRenderedFeatures(bbox, { layers: layerIds });
+
+    if (features.length === 0) return;
+
+    // Find the config for this feature's layer
+    const feature = features[0];
+    const config = this.configs.find(c => c.layerId === feature.layer?.id);
+
+    if (config) {
+      this.showPopup(e.lngLat, feature, config);
     }
   }
 

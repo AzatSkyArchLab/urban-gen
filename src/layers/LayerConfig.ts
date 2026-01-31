@@ -40,55 +40,47 @@ export interface LayerState {
   };
 }
 
+// Road categories based on class_active_2016 field
+// Gradient: Red (high priority) → Blue (low priority)
 export const OSI_SUSH_STYLES: Record<string, CategoryStyle> = {
-  'Магистральные улицы общегородского значения непрерывного движения': {
-    color: '#b91c1c',
-    width: 5,
-    label: 'Highways (Continuous)'
-  },
-  'Магистральные улицы общегородского значения I класса': {
+  'Магистральные городские дороги 1-го класса - скоростного движения': {
     color: '#dc2626',
-    width: 4.5,
-    label: 'City Streets Class I'
+    width: 7,
+    label: 'Highways Class 1 (High-speed)'
   },
-  'Магистральные улицы общегородского значения I класса центра': {
-    color: '#dc2626',
-    width: 4.5,
-    label: 'City Streets Class I (Center)'
-  },
-  'Магистральные улицы общегородского значения II класса': {
+  'Магистральные улицы общегородского значения 1-го класса - непрерывного движения': {
     color: '#ea580c',
-    width: 4,
-    label: 'City Streets Class II'
+    width: 6.5,
+    label: 'City Streets Class 1 (Continuous)'
   },
-  'Магистральные улицы общегородского значения II класса центра': {
-    color: '#ea580c',
-    width: 4,
-    label: 'City Streets Class II (Center)'
-  },
-  'Магистральные улицы общегородского значения регулируемого движения': {
+  'Магистральные городские дороги 2-го класса - регулируемого движения': {
     color: '#f97316',
-    width: 3.5,
-    label: 'City Streets (Regulated)'
+    width: 6,
+    label: 'Highways Class 2 (Regulated)'
+  },
+  'Магистральные улицы общегородского значения 2-го класса - регулируемого движения': {
+    color: '#eab308',
+    width: 5.5,
+    label: 'City Streets Class 2 (Regulated)'
+  },
+  'Магистральные улицы общегородского значения 3-го класса - регулируемого движения': {
+    color: '#84cc16',
+    width: 5,
+    label: 'City Streets Class 3 (Regulated)'
   },
   'Магистральные улицы районного значения': {
-    color: '#fb923c',
-    width: 3,
+    color: '#22c55e',
+    width: 4.5,
     label: 'District Streets'
   },
-  'Магистральные улицы районного значения центра': {
-    color: '#fb923c',
+  'Улицы и дороги местного значения': {
+    color: '#06b6d4',
+    width: 4,
+    label: 'Local Streets'
+  },
+  '-': {
+    color: '#3b82f6',
     width: 3,
-    label: 'District Streets (Center)'
-  },
-  'Прочая улично-дорожная сеть Москвы': {
-    color: '#facc15',
-    width: 2,
-    label: 'Other Roads'
-  },
-  'без категории': {
-    color: '#9ca3af',
-    width: 1.5,
     label: 'Uncategorized'
   }
 };
@@ -133,7 +125,7 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
       color: '#3b82f6',
       width: 2
     },
-    categoryField: 'kl_gp',
+    categoryField: 'class_active_2016',
     categoryStyles: OSI_SUSH_STYLES
   }
 ];
