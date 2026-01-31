@@ -64,13 +64,10 @@ export class UIManager {
     this.statusBar.init();
 
     // Compass control (map overlay)
-    const mapManager = app.getMapManager();
-    const map = mapManager?.getMap();
-    if (map) {
-      compassControl.init(map);
-    }
+    compassControl.init();
 
     // Feature popup for vector layers
+    const mapManager = app.getMapManager();
     if (mapManager && layerManager) {
       this.featurePopup = new FeaturePopup(mapManager, layerManager);
       this.featurePopup.init([

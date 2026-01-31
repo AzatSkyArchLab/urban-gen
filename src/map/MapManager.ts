@@ -245,6 +245,21 @@ export class MapManager {
   }
 
   // ============================================
+  // Bearing / Rotation
+  // ============================================
+  getBearing(): number {
+    return this.map?.getBearing() ?? 0;
+  }
+
+  resetBearing(): void {
+    this.map?.easeTo({ bearing: 0, duration: 300 });
+  }
+
+  onRotate(handler: () => void): void {
+    this.map?.on('rotate', handler);
+  }
+
+  // ============================================
   // Utils
   // ============================================
   disableDoubleClickZoom(): void {
