@@ -4,7 +4,8 @@
  * Features:
  * - Show popup with feature properties on click
  * - Cursor change on hover (pointer)
- * - Works with vector tile layers (osi_sush, etc.)
+ * - Configurable hitbox size for easier selection
+ * - Works with vector tile layers
  */
 
 import maplibregl from 'maplibre-gl';
@@ -16,21 +17,23 @@ export interface PopupConfig {
   layerId: string;
   titleField?: string;
   excludeFields?: string[];
-  hitboxSize?: number; // pixels around click point for hit detection
+  hitboxSize?: number;
 }
 
 const DEFAULT_EXCLUDE_FIELDS = ['id', 'geom', 'geometry', 'ogc_fid'];
-const DEFAULT_HITBOX_SIZE = 15; // pixels
+const DEFAULT_HITBOX_SIZE = 15;
 
 export class FeaturePopup {
   private mapManager: MapManager;
   private popup: maplibregl.Popup | null = null;
   private configs: PopupConfig[] = [];
   private initialized = false;
+  private activeLayerIds: string[] = [];
+  private isHovering = false;
+  private maxHitbox = DEFAULT_HITBOX_SIZE;
 
   constructor(mapManager: MapManager, _layerManager: LayerManager) {
     this.mapManager = mapManager;
-    // LayerManager reserved for future use (layer-specific popup configs)
     void _layerManager;
   }
 
@@ -41,8 +44,13 @@ export class FeaturePopup {
     if (this.initialized) return;
 
     this.configs = configs;
+    this.maxHitbox = Math.max(
+      DEFAULT_HITBOX_SIZE,
+      ...configs.map(c => c.hitboxSize ?? DEFAULT_HITBOX_SIZE)
+    );
+
     this.setupPopup();
-    this.setupLayerInteractions();
+    this.waitForLayersAndSetup();
 
     this.initialized = true;
     eventBus.emit('popup:initialized');
@@ -57,87 +65,99 @@ export class FeaturePopup {
     });
   }
 
-  private setupLayerInteractions(): void {
+  /**
+   * Wait for layers to be loaded, then setup interactions
+   */
+  private waitForLayersAndSetup(): void {
     const map = this.mapManager.getMap();
     if (!map) return;
 
-    // Store layer IDs - don't filter by existence (layers may load later)
-    const configuredLayerIds = this.configs.map(c => c.layerId);
+    const configuredIds = this.configs.map(c => c.layerId);
 
-    // Get max hitbox for hover detection
-    const maxHitbox = Math.max(
-      ...this.configs.map(c => c.hitboxSize ?? DEFAULT_HITBOX_SIZE)
-    );
+    const trySetup = () => {
+      // Check which layers actually exist
+      this.activeLayerIds = configuredIds.filter(id => {
+        const layer = map.getLayer(id);
+        return layer !== undefined;
+      });
 
-    // Track hover state to avoid excessive cursor changes
-    let isHovering = false;
-
-    // Cursor change on hover using bbox query (same hitbox as click)
-    map.on('mousemove', (e) => {
-      // Filter to existing layers at runtime (layers load async)
-      const layerIds = configuredLayerIds.filter(id => map.getLayer(id));
-      if (layerIds.length === 0) {
-        if (isHovering) {
-          this.mapManager.setCursor('');
-          isHovering = false;
-        }
-        return;
+      if (this.activeLayerIds.length > 0) {
+        this.setupInteractions();
       }
+    };
 
-      const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
-        [e.point.x - maxHitbox, e.point.y - maxHitbox],
-        [e.point.x + maxHitbox, e.point.y + maxHitbox]
-      ];
+    // Try immediately
+    trySetup();
 
-      const features = map.queryRenderedFeatures(bbox, { layers: layerIds });
-      const hasFeatures = features.length > 0;
-
-      if (hasFeatures && !isHovering) {
-        this.mapManager.setCursor('pointer');
-        isHovering = true;
-      } else if (!hasFeatures && isHovering) {
-        this.mapManager.setCursor('');
-        isHovering = false;
-      }
-    });
-
-    // Click handler with expanded hitbox using bbox query
-    map.on('click', (e) => {
-      // Filter to existing layers at runtime
-      const layerIds = configuredLayerIds.filter(id => map.getLayer(id));
-      if (layerIds.length > 0) {
-        this.handleMapClick(e, layerIds);
-      }
-    });
+    // Also try after map becomes idle (layers finish loading)
+    if (this.activeLayerIds.length === 0) {
+      map.once('idle', trySetup);
+    }
   }
 
-  private handleMapClick(e: maplibregl.MapMouseEvent, layerIds: string[]): void {
+  /**
+   * Setup mouse interactions for hover and click
+   */
+  private setupInteractions(): void {
     const map = this.mapManager.getMap();
-    if (!map) return;
+    if (!map || this.activeLayerIds.length === 0) return;
 
-    // Find config with largest hitbox for query
-    const maxHitbox = Math.max(
-      ...this.configs.map(c => c.hitboxSize ?? DEFAULT_HITBOX_SIZE)
-    );
+    // Hover: change cursor when near features
+    this.setupHoverInteraction(map);
 
-    // Create bbox around click point
+    // Click: show popup
+    this.setupClickInteraction(map);
+  }
+
+  private setupHoverInteraction(map: maplibregl.Map): void {
+    const onMouseMove = (e: maplibregl.MapMouseEvent) => {
+      const features = this.queryFeaturesAtPoint(map, e.point);
+      const hasFeatures = features.length > 0;
+
+      if (hasFeatures && !this.isHovering) {
+        map.getCanvas().style.cursor = 'pointer';
+        this.isHovering = true;
+      } else if (!hasFeatures && this.isHovering) {
+        map.getCanvas().style.cursor = '';
+        this.isHovering = false;
+      }
+    };
+
+    map.on('mousemove', onMouseMove);
+  }
+
+  private setupClickInteraction(map: maplibregl.Map): void {
+    const onClick = (e: maplibregl.MapMouseEvent) => {
+      const features = this.queryFeaturesAtPoint(map, e.point);
+
+      if (features.length === 0) return;
+
+      const feature = features[0];
+      const config = this.configs.find(c => c.layerId === feature.layer?.id);
+
+      if (config) {
+        this.showPopup(e.lngLat, feature, config);
+      }
+    };
+
+    map.on('click', onClick);
+  }
+
+  /**
+   * Query features within hitbox around a point
+   */
+  private queryFeaturesAtPoint(
+    map: maplibregl.Map,
+    point: maplibregl.Point
+  ): maplibregl.MapGeoJSONFeature[] {
+    if (this.activeLayerIds.length === 0) return [];
+
     const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
-      [e.point.x - maxHitbox, e.point.y - maxHitbox],
-      [e.point.x + maxHitbox, e.point.y + maxHitbox]
+      [point.x - this.maxHitbox, point.y - this.maxHitbox],
+      [point.x + this.maxHitbox, point.y + this.maxHitbox]
     ];
 
-    // Query features in bbox
-    const features = map.queryRenderedFeatures(bbox, { layers: layerIds });
-
-    if (features.length === 0) return;
-
-    // Find the config for this feature's layer
-    const feature = features[0];
-    const config = this.configs.find(c => c.layerId === feature.layer?.id);
-
-    if (config) {
-      this.showPopup(e.lngLat, feature, config);
-    }
+    return map.queryRenderedFeatures(bbox, { layers: this.activeLayerIds });
   }
 
   private showPopup(
@@ -171,7 +191,7 @@ export class FeaturePopup {
     // Title
     const title = config.titleField && props[config.titleField]
       ? props[config.titleField]
-      : `Feature`;
+      : 'Feature';
 
     // Properties table
     const rows = Object.entries(props)
@@ -201,7 +221,6 @@ export class FeaturePopup {
   }
 
   private formatKey(key: string): string {
-    // Convert snake_case to Title Case
     return key
       .replace(/_/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase());
@@ -236,6 +255,8 @@ export class FeaturePopup {
   destroy(): void {
     this.close();
     this.popup = null;
+    this.activeLayerIds = [];
+    this.isHovering = false;
     this.initialized = false;
   }
 }
