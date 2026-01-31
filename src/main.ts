@@ -9,7 +9,6 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles/main.css';
 import './styles/panels.css';
-import './styles/dialogs.css';
 
 import { app } from './core/App';
 import { uiManager } from './ui/UIManager';
