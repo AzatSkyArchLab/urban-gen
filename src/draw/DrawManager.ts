@@ -72,13 +72,17 @@ export class DrawManager implements IDrawManager {
       // Global undo/redo (works with any tool)
       if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
-        commandManager.undo();
+        console.log('Undo triggered, canUndo:', commandManager.canUndo());
+        const result = commandManager.undo();
+        console.log('Undo result:', result);
         return;
       }
       if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
           (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
         e.preventDefault();
-        commandManager.redo();
+        console.log('Redo triggered, canRedo:', commandManager.canRedo());
+        const result = commandManager.redo();
+        console.log('Redo result:', result);
         return;
       }
 
