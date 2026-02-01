@@ -4,6 +4,7 @@
 
 import { eventBus } from '../core/EventBus';
 import { Config } from '../core/Config';
+import { commandManager } from '../core/commands';
 import type { MapManager } from '../map/MapManager';
 import type { FeatureStore } from '../data/FeatureStore';
 import { FeaturesLayer } from './layers/FeaturesLayer';
@@ -67,12 +68,25 @@ export class DrawManager implements IDrawManager {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      
+
+      // Global undo/redo (works with any tool)
+      if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        commandManager.undo();
+        return;
+      }
+      if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
+          (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
+        e.preventDefault();
+        commandManager.redo();
+        return;
+      }
+
       if (e.key === 'Escape' && this.activeTool?.id !== 'select') {
         this.deactivateTool();
         return;
       }
-      
+
       this.activeTool?.onKeyDown?.(e);
     });
 

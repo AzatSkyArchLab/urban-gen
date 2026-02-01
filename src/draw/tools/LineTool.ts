@@ -1,6 +1,6 @@
 /**
  * LineTool - draw lines/polylines
- * 
+ *
  * Usage:
  * - Click to add points
  * - Double-click or Enter to complete (min 2 points)
@@ -9,6 +9,7 @@
  */
 
 import { eventBus } from '../../core/EventBus';
+import { commandManager, AddFeatureCommand } from '../../core/commands';
 import { BaseDrawTool } from './BaseTool';
 import type { IDrawManager } from './BaseTool';
 import type { MapClickEvent, UrbanFeature } from '../../types';
@@ -78,9 +79,10 @@ export class LineTool extends BaseDrawTool {
       }
     };
 
-    this.featureStore.add(line);
+    // Use command for undo/redo support
+    commandManager.execute(new AddFeatureCommand(this.featureStore, line));
     eventBus.emit('draw:line:complete', line);
-    
+
     this.reset();
     this.manager.clearPreview();
   }
