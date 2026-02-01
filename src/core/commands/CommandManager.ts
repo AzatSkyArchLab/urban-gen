@@ -42,7 +42,6 @@ export class CommandManager {
 
       // Add to undo stack
       this.undoStack.push(command);
-      console.log('Command executed:', command.description, 'Stack size:', this.undoStack.length);
 
       // Trim history if needed
       if (this.undoStack.length > this.maxHistory) {

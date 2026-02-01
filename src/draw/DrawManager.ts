@@ -65,27 +65,21 @@ export class DrawManager implements IDrawManager {
     });
 
     document.addEventListener('keydown', (e) => {
-      console.log('Keydown event:', e.key, 'ctrlKey:', e.ctrlKey, 'metaKey:', e.metaKey);
-
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        console.log('Ignoring: input/textarea focused');
         return;
       }
 
-      // Global undo/redo (works with any tool)
-      if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+      // Global undo/redo (works with any keyboard layout)
+      // Use e.code for physical key detection (KeyZ works for 'z', 'я', etc.)
+      if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
         e.preventDefault();
-        console.log('Undo triggered, canUndo:', commandManager.canUndo());
-        const result = commandManager.undo();
-        console.log('Undo result:', result);
+        commandManager.undo();
         return;
       }
-      if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
-          (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
+      if ((e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) ||
+          (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
         e.preventDefault();
-        console.log('Redo triggered, canRedo:', commandManager.canRedo());
-        const result = commandManager.redo();
-        console.log('Redo result:', result);
+        commandManager.redo();
         return;
       }
 
