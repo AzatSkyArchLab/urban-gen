@@ -65,7 +65,10 @@ export class DrawManager implements IDrawManager {
     });
 
     document.addEventListener('keydown', (e) => {
+      console.log('Keydown event:', e.key, 'ctrlKey:', e.ctrlKey, 'metaKey:', e.metaKey);
+
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        console.log('Ignoring: input/textarea focused');
         return;
       }
 
