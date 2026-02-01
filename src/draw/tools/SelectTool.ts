@@ -1,6 +1,6 @@
 /**
  * SelectTool - selection and navigation tool
- * 
+ *
  * Features:
  * - Click to select features
  * - Delete selected with Delete/Backspace
@@ -8,6 +8,7 @@
  */
 
 import { Config } from '../../core/Config';
+import { commandManager, RemoveFeatureCommand, BatchCommand } from '../../core/commands';
 import { BaseTool } from './BaseTool';
 import type { IDrawManager } from './BaseTool';
 import type { MapClickEvent } from '../../types';
@@ -49,11 +50,20 @@ export class SelectTool extends BaseTool {
 
   private deleteSelected(): void {
     const selectedIds = this.manager.getSelectedIds();
-    
-    for (const id of selectedIds) {
-      this.featureStore.remove(id);
+    if (selectedIds.length === 0) return;
+
+    // Create commands for each deletion
+    const commands = selectedIds.map(id =>
+      new RemoveFeatureCommand(this.featureStore, id)
+    );
+
+    // Execute as batch for single undo
+    if (commands.length === 1) {
+      commandManager.execute(commands[0]);
+    } else {
+      commandManager.execute(new BatchCommand(commands, `Remove ${commands.length} features`));
     }
-    
+
     this.manager.clearSelection();
   }
 }

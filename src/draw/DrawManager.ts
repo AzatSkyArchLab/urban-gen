@@ -4,6 +4,7 @@
 
 import { eventBus } from '../core/EventBus';
 import { Config } from '../core/Config';
+import { commandManager } from '../core/commands';
 import type { MapManager } from '../map/MapManager';
 import type { FeatureStore } from '../data/FeatureStore';
 import { FeaturesLayer } from './layers/FeaturesLayer';
@@ -67,12 +68,26 @@ export class DrawManager implements IDrawManager {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      
+
+      // Global undo/redo (works with any keyboard layout)
+      // Use e.code for physical key detection (KeyZ works for 'z', 'я', etc.)
+      if (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        commandManager.undo();
+        return;
+      }
+      if ((e.code === 'KeyY' && (e.ctrlKey || e.metaKey)) ||
+          (e.code === 'KeyZ' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
+        e.preventDefault();
+        commandManager.redo();
+        return;
+      }
+
       if (e.key === 'Escape' && this.activeTool?.id !== 'select') {
         this.deactivateTool();
         return;
       }
-      
+
       this.activeTool?.onKeyDown?.(e);
     });
 
@@ -80,27 +95,44 @@ export class DrawManager implements IDrawManager {
   }
 
   private setupHoverListeners(): void {
-      const map = this.mapManager.getMap();
-      if (!map) return;
+    const map = this.mapManager.getMap();
+    if (!map) return;
 
-      const interactiveLayers = this.featuresLayer.getInteractiveLayers();
-      console.log('Setting up hover for layers:', interactiveLayers);
-      
-      // Единый обработчик для всех слоёв
-      map.on('mousemove', (e) => {
-        if (this.activeTool?.id !== 'select') return;
-        
-        const features = map.queryRenderedFeatures(e.point, {
-          layers: interactiveLayers.filter(id => map.getLayer(id))
-        });
-        
-        if (features.length > 0) {
-          this.setCursor(Config.cursors.pointer);
-        } else {
-          this.setCursor(Config.cursors.grab);
-        }
+    const canvas = map.getCanvas();
+    const interactiveLayers = this.featuresLayer.getInteractiveLayers();
+    console.log('Setting up hover for layers:', interactiveLayers);
+
+    // Grabbing cursor when dragging (pan)
+    canvas.addEventListener('mousedown', () => {
+      if (this.activeTool?.id === 'select') {
+        this.setCursor(Config.cursors.grabbing);
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      if (this.activeTool?.id === 'select') {
+        this.setCursor(Config.cursors.grab);
+      }
+    });
+
+    // Hover only for drawn features (user's polygons/lines)
+    // Vector tile layers (osi-sush) are handled by FeaturePopup
+    map.on('mousemove', (e) => {
+      if (this.activeTool?.id !== 'select') return;
+
+      const existingLayers = interactiveLayers.filter(id => map.getLayer(id));
+      if (existingLayers.length === 0) return;
+
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: existingLayers
       });
-    }
+
+      if (features.length > 0) {
+        this.setCursor(Config.cursors.pointer);
+      }
+      // Don't reset cursor here - let FeaturePopup handle osi-sush hover
+    });
+  }
 
   registerTool(tool: BaseTool): void {
     this.tools.set(tool.id, tool);
@@ -141,7 +173,6 @@ export class DrawManager implements IDrawManager {
   }
 
   setCursor(cursor: string): void {
-    console.log('Setting cursor:', cursor);
     this.mapManager.setCursor(cursor);
   }
 

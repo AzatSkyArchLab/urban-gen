@@ -40,35 +40,47 @@ export interface LayerState {
   };
 }
 
+// Road categories based on class_active_2016 field
+// Gradient: Red (high priority) → Blue (low priority)
 export const OSI_SUSH_STYLES: Record<string, CategoryStyle> = {
-  'Магистральные улицы общегородского значения непрерывного движения': {
+  'Магистральные городские дороги 1-го класса - скоростного движения': {
     color: '#dc2626',
-    width: 4,
-    label: 'City Highways'
+    width: 7,
+    label: 'Highways Class 1 (High-speed)'
+  },
+  'Магистральные улицы общегородского значения 1-го класса - непрерывного движения': {
+    color: '#ea580c',
+    width: 6.5,
+    label: 'City Streets Class 1 (Continuous)'
   },
   'Магистральные городские дороги 2-го класса - регулируемого движения': {
-    color: '#ea580c',
-    width: 3.5,
-    label: 'Urban Roads Class 2'
+    color: '#f97316',
+    width: 6,
+    label: 'Highways Class 2 (Regulated)'
   },
   'Магистральные улицы общегородского значения 2-го класса - регулируемого движения': {
-    color: '#d97706',
-    width: 3,
-    label: 'City Streets Class 2'
+    color: '#eab308',
+    width: 5.5,
+    label: 'City Streets Class 2 (Regulated)'
+  },
+  'Магистральные улицы общегородского значения 3-го класса - регулируемого движения': {
+    color: '#84cc16',
+    width: 5,
+    label: 'City Streets Class 3 (Regulated)'
   },
   'Магистральные улицы районного значения': {
-    color: '#ca8a04',
-    width: 2.5,
+    color: '#22c55e',
+    width: 4.5,
     label: 'District Streets'
   },
   'Улицы и дороги местного значения': {
-    color: '#65a30d',
-    width: 2,
+    color: '#06b6d4',
+    width: 4,
     label: 'Local Streets'
   },
-  'без категории': {
-    color: '#9ca3af',
-    width: 1.5,
+  '-': {
+    color: '#3b82f6',
+    width: 3,
     label: 'Uncategorized'
   }
 };
@@ -81,8 +93,7 @@ export const OSI_SUSH_DEFAULT_STYLE: CategoryStyle = {
 
 export const RED_LINES_STYLE = {
   color: '#ef4444',
-  width: 2,
-  dasharray: [4, 2] as [number, number]
+  width: 2
 };
 
 // Vector layers from Martin server
@@ -98,8 +109,7 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
     editable: true,
     style: {
       color: RED_LINES_STYLE.color,
-      width: RED_LINES_STYLE.width,
-      dasharray: RED_LINES_STYLE.dasharray
+      width: RED_LINES_STYLE.width
     }
   },
   {
@@ -115,13 +125,13 @@ export const VECTOR_LAYERS: VectorLayerConfig[] = [
       color: '#3b82f6',
       width: 2
     },
-    categoryField: 'kl_gp',
+    categoryField: 'class_active_2016',
     categoryStyles: OSI_SUSH_STYLES
   }
 ];
 
 export function getTileUrl(sourceLayer: string): string {
-  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}.pbf`;
+  return `${Config.api.martinBaseUrl}/${sourceLayer}/{z}/{x}/{y}`;
 }
 
 export function getCategoryColorExpression(

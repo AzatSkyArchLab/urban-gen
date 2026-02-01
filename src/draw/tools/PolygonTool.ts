@@ -1,6 +1,6 @@
 /**
  * PolygonTool - draw polygons
- * 
+ *
  * Usage:
  * - Click to add points
  * - Double-click or Enter to complete (min 3 points)
@@ -9,6 +9,7 @@
  */
 
 import { eventBus } from '../../core/EventBus';
+import { commandManager, AddFeatureCommand } from '../../core/commands';
 import { BaseDrawTool } from './BaseTool';
 import type { IDrawManager } from './BaseTool';
 import type { MapClickEvent, UrbanFeature } from '../../types';
@@ -92,9 +93,10 @@ export class PolygonTool extends BaseDrawTool {
       }
     };
 
-    this.featureStore.add(polygon);
+    // Use command for undo/redo support
+    commandManager.execute(new AddFeatureCommand(this.featureStore, polygon));
     eventBus.emit('draw:polygon:complete', polygon);
-    
+
     this.reset();
     this.manager.clearPreview();
   }

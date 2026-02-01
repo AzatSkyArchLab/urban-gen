@@ -1,11 +1,11 @@
 /**
  * UIManager - coordinates all UI components
- * 
+ *
  * Responsibilities:
  * - Initialize all UI components in correct order
  * - Provide access to components
  * - Handle UI-level coordination
- * 
+ *
  * Must be initialized AFTER app.init()
  */
 
@@ -15,12 +15,15 @@ import { Toolbar } from './Toolbar';
 import { StatusBar } from './StatusBar';
 import { LayerPanel } from './panels/LayerPanel';
 import { FeaturePanel } from './panels/FeaturePanel';
+import { FeaturePopup } from './FeaturePopup';
+import { compassControl } from './CompassControl';
 
 export class UIManager {
   private toolbar: Toolbar | null = null;
   private statusBar: StatusBar | null = null;
   private layerPanel: LayerPanel | null = null;
   private featurePanel: FeaturePanel | null = null;
+  private featurePopup: FeaturePopup | null = null;
   private initialized = false;
 
   /**
@@ -60,6 +63,23 @@ export class UIManager {
     this.statusBar = new StatusBar('status-bar');
     this.statusBar.init();
 
+    // Compass control (map overlay)
+    compassControl.init();
+
+    // Feature popup for vector layers
+    const mapManager = app.getMapManager();
+    if (mapManager && layerManager) {
+      this.featurePopup = new FeaturePopup(mapManager, layerManager);
+      this.featurePopup.init([
+        {
+          layerId: 'osi-sush',
+          titleField: 'na_obj',
+          excludeFields: ['geom', 'id', 'ID'],
+          hitboxSize: 15
+        }
+      ]);
+    }
+
     this.initialized = true;
     eventBus.emit('ui:ready');
     console.log('UI initialized');
@@ -82,6 +102,10 @@ export class UIManager {
 
   getFeaturePanel(): FeaturePanel | null {
     return this.featurePanel;
+  }
+
+  getFeaturePopup(): FeaturePopup | null {
+    return this.featurePopup;
   }
 
   get isInitialized(): boolean {
