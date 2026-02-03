@@ -2,10 +2,11 @@
  * PolygonClipper - splits polygon by lines (red lines)
  *
  * Algorithm:
- * 1. Extend short line segments to cross polygon bounds
- * 2. Find all intersection points between polygon and extended lines
- * 3. Split polygon edges at intersection points
- * 4. Build sub-polygons from split edges
+ * 1. Merge connected line segments into continuous polylines
+ * 2. Extend polylines to cross polygon bounds
+ * 3. Find all intersection points between polygon and extended lines
+ * 4. Split polygon edges at intersection points
+ * 5. Build sub-polygons from split edges
  */
 
 import type { Point, Coordinate, SubPolygon } from '../types';
@@ -20,6 +21,77 @@ interface SplitPoint {
   lineIdx: number;
   edgeIdx: number;
   t: number; // parameter along edge (0-1)
+}
+
+const MERGE_TOLERANCE = 5; // pixels - tolerance for merging endpoints
+
+/**
+ * Check if two points are close enough to merge
+ */
+function pointsClose(p1: Point, p2: Point, tolerance = MERGE_TOLERANCE): boolean {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  return Math.sqrt(dx * dx + dy * dy) < tolerance;
+}
+
+/**
+ * Merge connected line segments into continuous polylines
+ * This joins segments that share endpoints
+ */
+function mergeLineSegments(lines: Point[][]): Point[][] {
+  if (lines.length === 0) return [];
+
+  // Create a copy of lines to work with
+  const remaining = lines.map(line => [...line]);
+  const merged: Point[][] = [];
+
+  while (remaining.length > 0) {
+    // Start a new polyline with the first remaining segment
+    let current = remaining.shift()!;
+    let changed = true;
+
+    // Keep trying to extend the current polyline
+    while (changed) {
+      changed = false;
+
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        const segment = remaining[i];
+        const segStart = segment[0];
+        const segEnd = segment[segment.length - 1];
+        const curStart = current[0];
+        const curEnd = current[current.length - 1];
+
+        // Try to connect: segment end -> current start
+        if (pointsClose(segEnd, curStart)) {
+          current = [...segment.slice(0, -1), ...current];
+          remaining.splice(i, 1);
+          changed = true;
+        }
+        // Try to connect: current end -> segment start
+        else if (pointsClose(curEnd, segStart)) {
+          current = [...current.slice(0, -1), ...segment];
+          remaining.splice(i, 1);
+          changed = true;
+        }
+        // Try to connect: segment start -> current start (reverse segment)
+        else if (pointsClose(segStart, curStart)) {
+          current = [...segment.reverse().slice(0, -1), ...current];
+          remaining.splice(i, 1);
+          changed = true;
+        }
+        // Try to connect: current end -> segment end (reverse segment)
+        else if (pointsClose(curEnd, segEnd)) {
+          current = [...current.slice(0, -1), ...segment.reverse()];
+          remaining.splice(i, 1);
+          changed = true;
+        }
+      }
+    }
+
+    merged.push(current);
+  }
+
+  return merged;
 }
 
 /**
@@ -134,15 +206,27 @@ export function splitPolygonByLines(
 
   const polyBounds = { minX: polyMinX, maxX: polyMaxX, minY: polyMinY, maxY: polyMaxY };
 
-  // Filter and extend lines that are near the polygon
-  const extendedLines: Point[][] = [];
+  // First, filter lines that are near the polygon
+  const nearbyLines: Point[][] = [];
   for (const line of lines) {
     if (lineNearPolygon(line, polygon, polyBounds)) {
-      extendedLines.push(extendLine(line, polyBounds));
+      nearbyLines.push(line);
     }
   }
 
-  console.log(`[PolygonClipper] Extended ${extendedLines.length} lines near polygon`);
+  console.log(`[PolygonClipper] Nearby lines before merge: ${nearbyLines.length}`);
+
+  // Merge connected line segments into continuous polylines
+  const mergedLines = mergeLineSegments(nearbyLines);
+  console.log(`[PolygonClipper] Merged into ${mergedLines.length} continuous polylines`);
+
+  // Extend merged lines
+  const extendedLines: Point[][] = [];
+  for (const line of mergedLines) {
+    extendedLines.push(extendLine(line, polyBounds));
+  }
+
+  console.log(`[PolygonClipper] Extended ${extendedLines.length} lines`);
 
   // Debug: log first extended line
   if (extendedLines.length > 0 && extendedLines[0].length > 1) {
