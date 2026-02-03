@@ -91,11 +91,18 @@ export class GridGeneratorManager {
       const redLinesPixels = lineFeaturesToPixels(redLines, project);
       const roadsPixels = lineFeaturesToPixels(roads, project);
 
+      // Debug: show polygon and line bounds
+      console.log('[GridGen] Source polygon pixels:', sourcePixels.slice(0, 3), '...');
+      if (redLinesPixels.length > 0) {
+        console.log('[GridGen] First red line pixels:', redLinesPixels[0].slice(0, 3), '...');
+      }
+
       this.state.redLines = redLines;
       this.state.roads = roads;
 
       // Split polygon by red lines
       const splitPolygons = splitPolygonByLines(sourcePixels, redLinesPixels);
+      console.log('[GridGen] Split result:', splitPolygons.length, 'polygons');
 
       // Calculate cell size in pixels based on zoom
       const center = map.getCenter();

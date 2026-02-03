@@ -28,17 +28,25 @@ export function splitPolygonByLines(
   polygon: Point[],
   lines: Point[][]
 ): Point[][] {
+  console.log(`[PolygonClipper] Input: polygon with ${polygon.length} points, ${lines.length} lines`);
+
   if (lines.length === 0) {
+    console.log('[PolygonClipper] No lines to split by, returning original polygon');
     return [polygon];
   }
 
   let currentPolygons = [polygon];
+  let totalIntersections = 0;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const newPolygons: Point[][] = [];
 
     for (const poly of currentPolygons) {
       const split = splitPolygonBySingleLine(poly, line);
+      if (split.length > 1) {
+        totalIntersections++;
+      }
       newPolygons.push(...split);
     }
 
@@ -46,9 +54,13 @@ export function splitPolygonByLines(
   }
 
   // Filter out degenerate polygons (less than 3 points or very small area)
-  return currentPolygons.filter(
+  const result = currentPolygons.filter(
     (p) => p.length >= 3 && polygonArea(p) > 1
   );
+
+  console.log(`[PolygonClipper] Result: ${result.length} sub-polygons, ${totalIntersections} lines caused splits`);
+
+  return result;
 }
 
 /**
