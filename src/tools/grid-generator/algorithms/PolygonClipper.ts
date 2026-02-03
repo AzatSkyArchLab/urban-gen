@@ -2,9 +2,10 @@
  * PolygonClipper - splits polygon by lines (red lines)
  *
  * Algorithm:
- * 1. Find all intersection points between polygon and lines
- * 2. Split polygon edges at intersection points
- * 3. Build sub-polygons from split edges
+ * 1. Extend short line segments to cross polygon bounds
+ * 2. Find all intersection points between polygon and extended lines
+ * 3. Split polygon edges at intersection points
+ * 4. Build sub-polygons from split edges
  */
 
 import type { Point, Coordinate, SubPolygon } from '../types';
@@ -19,6 +20,56 @@ interface SplitPoint {
   lineIdx: number;
   edgeIdx: number;
   t: number; // parameter along edge (0-1)
+}
+
+/**
+ * Extend a line segment in both directions to ensure it crosses polygon bounds
+ */
+function extendLine(line: Point[], polyBounds: { minX: number; maxX: number; minY: number; maxY: number }): Point[] {
+  if (line.length < 2) return line;
+
+  // Get line direction from first and last points
+  const p1 = line[0];
+  const p2 = line[line.length - 1];
+
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+
+  if (len < 0.001) return line;
+
+  // Normalize direction
+  const ux = dx / len;
+  const uy = dy / len;
+
+  // Calculate how far to extend to cross polygon bounds
+  const polyWidth = polyBounds.maxX - polyBounds.minX;
+  const polyHeight = polyBounds.maxY - polyBounds.minY;
+  const extendDist = Math.max(polyWidth, polyHeight) * 2;
+
+  // Extend in both directions
+  const extended: Point[] = [
+    { x: p1.x - ux * extendDist, y: p1.y - uy * extendDist },
+    ...line,
+    { x: p2.x + ux * extendDist, y: p2.y + uy * extendDist }
+  ];
+
+  return extended;
+}
+
+/**
+ * Check if a line segment is inside or near the polygon
+ */
+function lineNearPolygon(line: Point[], _polygon: Point[], polyBounds: { minX: number; maxX: number; minY: number; maxY: number }): boolean {
+  // Check if any point of the line is inside or near the polygon bounds
+  const margin = 50; // pixels
+  for (const pt of line) {
+    if (pt.x >= polyBounds.minX - margin && pt.x <= polyBounds.maxX + margin &&
+        pt.y >= polyBounds.minY - margin && pt.y <= polyBounds.maxY + margin) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -81,21 +132,33 @@ export function splitPolygonByLines(
   });
   console.log(`[PolygonClipper] Lines with overlapping bounds: ${linesInBounds} of ${lines.length}`);
 
-  // Debug: log first polygon vertex and first line segment
-  if (lines.length > 0 && lines[0].length > 1) {
-    console.log('[PolygonClipper] First polygon vertex:', { x: polygon[0].x.toFixed(1), y: polygon[0].y.toFixed(1) });
-    console.log('[PolygonClipper] First line segment:',
-      { x: lines[0][0].x.toFixed(1), y: lines[0][0].y.toFixed(1) },
+  const polyBounds = { minX: polyMinX, maxX: polyMaxX, minY: polyMinY, maxY: polyMaxY };
+
+  // Filter and extend lines that are near the polygon
+  const extendedLines: Point[][] = [];
+  for (const line of lines) {
+    if (lineNearPolygon(line, polygon, polyBounds)) {
+      extendedLines.push(extendLine(line, polyBounds));
+    }
+  }
+
+  console.log(`[PolygonClipper] Extended ${extendedLines.length} lines near polygon`);
+
+  // Debug: log first extended line
+  if (extendedLines.length > 0 && extendedLines[0].length > 1) {
+    const el = extendedLines[0];
+    console.log('[PolygonClipper] First extended line:',
+      { x: el[0].x.toFixed(1), y: el[0].y.toFixed(1) },
       '->',
-      { x: lines[0][1].x.toFixed(1), y: lines[0][1].y.toFixed(1) }
+      { x: el[el.length - 1].x.toFixed(1), y: el[el.length - 1].y.toFixed(1) }
     );
   }
 
   let currentPolygons = [polygon];
   let totalIntersections = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 0; i < extendedLines.length; i++) {
+    const line = extendedLines[i];
     const newPolygons: Point[][] = [];
 
     for (const poly of currentPolygons) {

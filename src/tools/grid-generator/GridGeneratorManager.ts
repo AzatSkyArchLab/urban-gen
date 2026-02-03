@@ -13,7 +13,9 @@
 
 import type { MapManager } from '../../map/MapManager';
 import { eventBus } from '../../core/EventBus';
+import { commandManager } from '../../core/commands/CommandManager';
 import { GridLayer } from './layers/GridLayer';
+import { GridGenerationCommand } from './commands/GridGenerationCommand';
 import type {
   Coordinate,
   Point,
@@ -65,6 +67,10 @@ export class GridGeneratorManager {
    */
   async processPolygon(coordinates: Coordinate[]): Promise<void> {
     if (coordinates.length < 3) return;
+
+    // Create command for undo/redo
+    const command = new GridGenerationCommand(this);
+    command.saveCurrentState();
 
     this.state.isProcessing = true;
     this.state.sourcePolygon = coordinates;
@@ -160,6 +166,10 @@ export class GridGeneratorManager {
 
       // Update visualization
       this.updateVisualization();
+
+      // Save new state and add to command history
+      command.saveNewState();
+      commandManager.execute(command);
 
       eventBus.emit('grid-gen:processing:complete', {
         subPolygonsCount: subPolygons.length,
@@ -425,11 +435,28 @@ export class GridGeneratorManager {
   }
 
   /**
+   * Restore state from a saved state (for undo/redo)
+   */
+  restoreState(savedState: GridGeneratorState): void {
+    this.state = JSON.parse(JSON.stringify(savedState));
+    this.updateVisualization();
+    eventBus.emit('grid-gen:state:restored');
+  }
+
+  /**
    * Clear all state and visualization
    */
   clear(): void {
+    // Create command for undo support
+    const command = new GridGenerationCommand(this);
+    command.saveCurrentState();
+
     this.state = this.getInitialState();
     this.gridLayer.clear();
+
+    command.saveNewState();
+    commandManager.execute(command);
+
     eventBus.emit('grid-gen:cleared');
   }
 

@@ -71,6 +71,30 @@ export class GridLayer {
       }
     });
 
+    // Sub-polygon centroid labels with index
+    map.addLayer({
+      id: `${LAYER_PREFIX}-subpolygons-label`,
+      type: 'symbol',
+      source: this.sourceId,
+      filter: ['==', ['get', 'type'], 'subpolygon-label'],
+      layout: {
+        'text-field': ['get', 'index'],
+        'text-size': 24,
+        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        'text-anchor': 'center'
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': [
+          'case',
+          ['get', 'isValid'],
+          '#16a34a',
+          '#dc2626'
+        ],
+        'text-halo-width': 3
+      }
+    });
+
     // Grid cells (clean = green, affected = red)
     map.addLayer({
       id: `${LAYER_PREFIX}-cells-fill`,
@@ -204,7 +228,9 @@ export class GridLayer {
 
     const features: GeoJSON.Feature[] = [];
 
-    for (const subPoly of subPolygons) {
+    for (let i = 0; i < subPolygons.length; i++) {
+      const subPoly = subPolygons[i];
+
       // Sub-polygon outline
       features.push({
         type: 'Feature',
@@ -216,6 +242,21 @@ export class GridLayer {
         geometry: {
           type: 'Polygon',
           coordinates: [[...subPoly.coordinates, subPoly.coordinates[0]]]
+        }
+      });
+
+      // Centroid label with index
+      const centroid = this.calculateCentroid(subPoly.coordinates);
+      features.push({
+        type: 'Feature',
+        properties: {
+          type: 'subpolygon-label',
+          index: String(i),
+          isValid: subPoly.isValid
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: centroid
         }
       });
 
@@ -337,6 +378,18 @@ export class GridLayer {
   }
 
   /**
+   * Calculate centroid of a polygon from coordinates
+   */
+  private calculateCentroid(coords: Coordinate[]): Coordinate {
+    let cx = 0, cy = 0;
+    for (const c of coords) {
+      cx += c[0];
+      cy += c[1];
+    }
+    return [cx / coords.length, cy / coords.length];
+  }
+
+  /**
    * Clear all visualization
    */
   clear(): void {
@@ -382,6 +435,7 @@ export class GridLayer {
       `${LAYER_PREFIX}-blocks-outline-white`,
       `${LAYER_PREFIX}-blocks-fill`,
       `${LAYER_PREFIX}-cells-fill`,
+      `${LAYER_PREFIX}-subpolygons-label`,
       `${LAYER_PREFIX}-subpolygons-line`,
       `${LAYER_PREFIX}-subpolygons-fill`
     ];

@@ -81,6 +81,10 @@ export class GridGeneratorTool extends BaseTool {
       eventBus.emit('draw:point:removed', { total: this.points.length });
     } else if (e.key === 'Enter' && this.points.length >= 3) {
       this.complete();
+    } else if (e.key === 'Delete' || (e.key === 'Backspace' && this.points.length === 0)) {
+      // Delete the grid generation result if no points are being drawn
+      e.preventDefault();
+      this.gridManager.clear();
     }
   }
 
