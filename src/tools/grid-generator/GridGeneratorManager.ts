@@ -209,6 +209,17 @@ export class GridGeneratorManager {
       [Math.max(sw.x, ne.x), Math.max(sw.y, ne.y)]
     ];
 
+    // Debug: list all available layers
+    const style = map.getStyle();
+    const layerIds = style?.layers?.map(l => l.id) || [];
+    console.log('[GridGen] Available layers:', layerIds);
+
+    // Query ALL features first to see what's there
+    const allFeatures = map.queryRenderedFeatures(bbox);
+    const uniqueSources = [...new Set(allFeatures.map(f => f.source))];
+    const uniqueLayers = [...new Set(allFeatures.map(f => f.layer?.id))];
+    console.log('[GridGen] Features in bbox - sources:', uniqueSources, 'layers:', uniqueLayers);
+
     // Query red_lines layer (layer id from LayerConfig)
     const redLinesRaw = map.queryRenderedFeatures(bbox, {
       layers: ['red-lines']
@@ -219,12 +230,14 @@ export class GridGeneratorManager {
       layers: ['osi-sush']
     });
 
+    console.log('[GridGen] Raw query results - red-lines:', redLinesRaw.length, 'osi-sush:', roadsRaw.length);
+
     // Convert to LineString features
     const redLines = this.extractLineFeatures(redLinesRaw);
     const roads = this.extractLineFeatures(roadsRaw);
 
     console.log(
-      `[GridGen] Found ${redLines.length} red lines, ${roads.length} roads`
+      `[GridGen] Extracted ${redLines.length} red lines, ${roads.length} roads`
     );
 
     return { redLines, roads };
