@@ -30,9 +30,65 @@ export function splitPolygonByLines(
 ): Point[][] {
   console.log(`[PolygonClipper] Input: polygon with ${polygon.length} points, ${lines.length} lines`);
 
+  // Debug: log actual polygon coordinates
+  const polyMinX = Math.min(...polygon.map(p => p.x));
+  const polyMaxX = Math.max(...polygon.map(p => p.x));
+  const polyMinY = Math.min(...polygon.map(p => p.y));
+  const polyMaxY = Math.max(...polygon.map(p => p.y));
+  console.log('[PolygonClipper] Polygon bounds:', {
+    minX: polyMinX.toFixed(1),
+    maxX: polyMaxX.toFixed(1),
+    minY: polyMinY.toFixed(1),
+    maxY: polyMaxY.toFixed(1)
+  });
+
   if (lines.length === 0) {
     console.log('[PolygonClipper] No lines to split by, returning original polygon');
     return [polygon];
+  }
+
+  // Debug: log line bounds and count overlapping lines
+  let lineMinX = Infinity, lineMaxX = -Infinity;
+  let lineMinY = Infinity, lineMaxY = -Infinity;
+  let linesInBounds = 0;
+
+  for (const line of lines) {
+    let lMinX = Infinity, lMaxX = -Infinity;
+    let lMinY = Infinity, lMaxY = -Infinity;
+    for (const pt of line) {
+      lMinX = Math.min(lMinX, pt.x);
+      lMaxX = Math.max(lMaxX, pt.x);
+      lMinY = Math.min(lMinY, pt.y);
+      lMaxY = Math.max(lMaxY, pt.y);
+      lineMinX = Math.min(lineMinX, pt.x);
+      lineMaxX = Math.max(lineMaxX, pt.x);
+      lineMinY = Math.min(lineMinY, pt.y);
+      lineMaxY = Math.max(lineMaxY, pt.y);
+    }
+
+    // Check if this line's bounds overlap with polygon bounds
+    const overlapsX = lMinX <= polyMaxX && lMaxX >= polyMinX;
+    const overlapsY = lMinY <= polyMaxY && lMaxY >= polyMinY;
+    if (overlapsX && overlapsY) {
+      linesInBounds++;
+    }
+  }
+  console.log('[PolygonClipper] Lines bounds:', {
+    minX: lineMinX.toFixed(1),
+    maxX: lineMaxX.toFixed(1),
+    minY: lineMinY.toFixed(1),
+    maxY: lineMaxY.toFixed(1)
+  });
+  console.log(`[PolygonClipper] Lines with overlapping bounds: ${linesInBounds} of ${lines.length}`);
+
+  // Debug: log first polygon vertex and first line segment
+  if (lines.length > 0 && lines[0].length > 1) {
+    console.log('[PolygonClipper] First polygon vertex:', { x: polygon[0].x.toFixed(1), y: polygon[0].y.toFixed(1) });
+    console.log('[PolygonClipper] First line segment:',
+      { x: lines[0][0].x.toFixed(1), y: lines[0][0].y.toFixed(1) },
+      '->',
+      { x: lines[0][1].x.toFixed(1), y: lines[0][1].y.toFixed(1) }
+    );
   }
 
   let currentPolygons = [polygon];
@@ -43,7 +99,7 @@ export function splitPolygonByLines(
     const newPolygons: Point[][] = [];
 
     for (const poly of currentPolygons) {
-      const split = splitPolygonBySingleLine(poly, line);
+      const split = splitPolygonBySingleLine(poly, line, i < 3); // Debug first 3 lines
       if (split.length > 1) {
         totalIntersections++;
       }
@@ -66,7 +122,7 @@ export function splitPolygonByLines(
 /**
  * Split a single polygon by a single line
  */
-function splitPolygonBySingleLine(polygon: Point[], line: Point[]): Point[][] {
+function splitPolygonBySingleLine(polygon: Point[], line: Point[], debug = false): Point[][] {
   // Find all intersection points
   const intersections: SplitPoint[] = [];
 
@@ -99,6 +155,10 @@ function splitPolygonBySingleLine(polygon: Point[], line: Point[]): Point[][] {
         });
       }
     }
+  }
+
+  if (debug) {
+    console.log(`[PolygonClipper] Line with ${line.length} points found ${intersections.length} intersections`);
   }
 
   // Need at least 2 intersections to split
