@@ -24,6 +24,13 @@ const ICONS = {
     <line x1="5" y1="19" x2="19" y2="5"/>
     <circle cx="5" cy="19" r="2"/>
     <circle cx="19" cy="5" r="2"/>
+  </svg>`,
+  // Grid Generator - experimental module
+  grid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="3" y="3" width="7" height="7"/>
+    <rect x="14" y="3" width="7" height="7"/>
+    <rect x="3" y="14" width="7" height="7"/>
+    <rect x="14" y="14" width="7" height="7"/>
   </svg>`
 };
 
@@ -58,6 +65,10 @@ export class Toolbar {
       <button class="tool-btn" data-tool="line" data-tooltip="Line (L)">
         ${ICONS.line}
       </button>
+      <div class="toolbar-divider"></div>
+      <button class="tool-btn" data-tool="grid-generator" data-tooltip="Grid Generator (G)">
+        ${ICONS.grid}
+      </button>
     `;
   }
 
@@ -91,7 +102,8 @@ export class Toolbar {
       const shortcuts: Record<string, string> = {
         'v': 'select',
         'p': 'polygon',
-        'l': 'line'
+        'l': 'line',
+        'g': 'grid-generator'
       };
 
       const tool = shortcuts[e.key.toLowerCase()];

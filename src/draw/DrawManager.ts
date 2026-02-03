@@ -14,16 +14,22 @@ import { SelectTool } from './tools/SelectTool';
 import { PolygonTool } from './tools/PolygonTool';
 import { LineTool } from './tools/LineTool';
 import type { MapClickEvent, MapMouseEvent } from '../types';
+// Grid Generator - experimental module (remove this import to disable)
+import { GridGeneratorTool, GridGeneratorManager, GridPanel } from '../tools/grid-generator';
 
 export class DrawManager implements IDrawManager {
   private mapManager: MapManager;
   private featureStore: FeatureStore;
-  
+
   private featuresLayer: FeaturesLayer;
   private previewLayer: PreviewLayer;
-  
+
   private tools = new Map<string, BaseTool>();
   private activeTool: BaseTool | null = null;
+
+  // Grid Generator - experimental module
+  private gridManager: GridGeneratorManager | null = null;
+  private gridPanel: GridPanel | null = null;
 
   constructor(mapManager: MapManager, featureStore: FeatureStore) {
     this.mapManager = mapManager;
@@ -48,6 +54,14 @@ export class DrawManager implements IDrawManager {
     this.registerTool(new SelectTool(this, this.featureStore));
     this.registerTool(new PolygonTool(this, this.featureStore));
     this.registerTool(new LineTool(this, this.featureStore));
+
+    // Grid Generator - experimental module
+    this.gridManager = new GridGeneratorManager(this.mapManager);
+    this.gridManager.init();
+    this.registerTool(new GridGeneratorTool(this, this.mapManager, this.gridManager));
+    this.gridPanel = new GridPanel('grid-panel', this.gridManager);
+    this.gridPanel.init();
+
     console.log('Tools registered:', Array.from(this.tools.keys()));
   }
 
