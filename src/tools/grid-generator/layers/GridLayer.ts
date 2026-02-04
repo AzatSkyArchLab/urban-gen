@@ -286,7 +286,13 @@ export class GridLayer {
         const variant = subPoly.variants[subPoly.currentVariant];
 
         for (const block of variant.blocks) {
-          const coords = this.pixelCornersToCoords(block.corners, unproject);
+          // Use clipped corners if available, otherwise fall back to regular corners
+          const cornersToUse = block.clippedCorners || block.corners;
+          const coords = this.pixelCornersToCoords(cornersToUse, unproject);
+
+          // Skip blocks that are completely clipped away
+          if (coords.length < 3) continue;
+
           features.push({
             type: 'Feature',
             properties: {

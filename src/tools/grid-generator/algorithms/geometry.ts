@@ -310,3 +310,86 @@ export function polygonCentroid(points: Point[]): Point {
   }
   return { x: cx / n, y: cy / n };
 }
+
+/**
+ * Compute intersection point of line (p1->p2) with edge (e1->e2)
+ */
+function lineEdgeIntersection(p1: Point, p2: Point, e1: Point, e2: Point): Point | null {
+  const dx1 = p2.x - p1.x;
+  const dy1 = p2.y - p1.y;
+  const dx2 = e2.x - e1.x;
+  const dy2 = e2.y - e1.y;
+
+  const denom = dx1 * dy2 - dy1 * dx2;
+  if (Math.abs(denom) < 1e-10) return null;
+
+  const t = ((e1.x - p1.x) * dy2 - (e1.y - p1.y) * dx2) / denom;
+
+  return {
+    x: p1.x + t * dx1,
+    y: p1.y + t * dy1
+  };
+}
+
+/**
+ * Check which side of edge a point is on
+ * Returns > 0 if left (inside for CCW polygon), < 0 if right, 0 if on edge
+ */
+function sideOfEdge(point: Point, edgeStart: Point, edgeEnd: Point): number {
+  return (edgeEnd.x - edgeStart.x) * (point.y - edgeStart.y) -
+         (edgeEnd.y - edgeStart.y) * (point.x - edgeStart.x);
+}
+
+/**
+ * Clip subject polygon by one edge of the clip polygon (Sutherland-Hodgman step)
+ */
+function clipByEdge(subject: Point[], edgeStart: Point, edgeEnd: Point): Point[] {
+  if (subject.length === 0) return [];
+
+  const output: Point[] = [];
+
+  for (let i = 0; i < subject.length; i++) {
+    const current = subject[i];
+    const next = subject[(i + 1) % subject.length];
+
+    const currentInside = sideOfEdge(current, edgeStart, edgeEnd) >= 0;
+    const nextInside = sideOfEdge(next, edgeStart, edgeEnd) >= 0;
+
+    if (currentInside) {
+      output.push(current);
+      if (!nextInside) {
+        // Exiting - add intersection
+        const intersection = lineEdgeIntersection(current, next, edgeStart, edgeEnd);
+        if (intersection) output.push(intersection);
+      }
+    } else if (nextInside) {
+      // Entering - add intersection
+      const intersection = lineEdgeIntersection(current, next, edgeStart, edgeEnd);
+      if (intersection) output.push(intersection);
+    }
+  }
+
+  return output;
+}
+
+/**
+ * Clip a polygon by another polygon using Sutherland-Hodgman algorithm
+ * Works best when clip polygon is convex, but handles simple concave cases
+ */
+export function clipPolygonByPolygon(subject: Point[], clip: Point[]): Point[] {
+  if (subject.length < 3 || clip.length < 3) return [];
+
+  let result = [...subject];
+
+  // Clip by each edge of the clip polygon
+  for (let i = 0; i < clip.length; i++) {
+    const edgeStart = clip[i];
+    const edgeEnd = clip[(i + 1) % clip.length];
+
+    result = clipByEdge(result, edgeStart, edgeEnd);
+
+    if (result.length < 3) return [];
+  }
+
+  return result;
+}

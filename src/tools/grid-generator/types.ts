@@ -42,6 +42,7 @@ export interface PlacedBlock {
   gridPos: { x: number; y: number };
   size: { w: number; h: number };
   corners: Point[];
+  clippedCorners?: Point[]; // Corners clipped by polygon boundary
   category: 'clean' | 'affected';
 }
 

@@ -11,7 +11,7 @@ import type {
   PlacementVariant
 } from '../types';
 import { GRID_CONFIG } from '../types';
-import { getMinimumBoundingBox, isPointInPolygon } from './geometry';
+import { getMinimumBoundingBox, isPointInPolygon, clipPolygonByPolygon } from './geometry';
 
 /**
  * Generate grid cells inside polygon
@@ -106,7 +106,8 @@ function placeBlocksWithStrategy(
   _cellsMap: (GridCell | null)[][],
   bbox: BoundingBox,
   cellSizePixels: number,
-  strategy: PlacementStrategy
+  strategy: PlacementStrategy,
+  polygon: Point[]
 ): PlacedBlock[] {
   const placed: PlacedBlock[] = [];
   const occupied: boolean[][] = Array(height)
@@ -232,11 +233,15 @@ function placeBlocksWithStrategy(
             }
           ];
 
+          // Clip block by polygon boundary
+          const clippedCorners = clipPolygonByPolygon(corners, polygon);
+
           placed.push({
             type: blockType,
             gridPos: { x: i, y: j },
             size: { w: orient.w, h: orient.h },
             corners,
+            clippedCorners: clippedCorners.length >= 3 ? clippedCorners : corners,
             category: 'clean'
           });
 
@@ -297,7 +302,8 @@ export function generateVariants(
       cellsMap,
       bbox,
       cellSizePixels,
-      strategy
+      strategy,
+      polygon
     );
 
     const count32 = blocks.filter((b) => b.type.name === '3x2').length;
