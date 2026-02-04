@@ -261,11 +261,21 @@ export function splitPolygonByLines(polygon: Point[], lines: Point[][]): Point[]
 
   console.log(`[PolygonClipper] Result: ${result.length} sub-polygons`);
 
-  // Merge touching polygons
-  const mergedPolygons = mergeTouchingPolygons(result.length > 0 ? result : [polygon]);
-  console.log(`[PolygonClipper] After merge: ${mergedPolygons.length} sub-polygons`);
+  // Merge touching polygons (if more than one)
+  if (result.length > 1) {
+    try {
+      const mergedPolygons = mergeTouchingPolygons(result);
+      console.log(`[PolygonClipper] After merge: ${mergedPolygons.length} sub-polygons`);
+      // Only use merged result if it's valid
+      if (mergedPolygons.length > 0 && mergedPolygons.every(p => p.length >= 3)) {
+        return mergedPolygons;
+      }
+    } catch (e) {
+      console.warn('[PolygonClipper] Merge failed, using original polygons:', e);
+    }
+  }
 
-  return mergedPolygons;
+  return result.length > 0 ? result : [polygon];
 }
 
 /**
@@ -381,6 +391,7 @@ function findSharedEdge(
 
 /**
  * Merge two polygons that share an edge
+ * The shared edge is removed and the remaining vertices are combined
  */
 function mergeTwoPolygons(poly1: Point[], poly2: Point[]): Point[] | null {
   const shared = findSharedEdge(poly1, poly2);
@@ -388,44 +399,57 @@ function mergeTwoPolygons(poly1: Point[], poly2: Point[]): Point[] | null {
 
   const result: Point[] = [];
 
-  // Walk poly1 from after shared edge to before shared edge
-  let idx = shared.edge1End;
-  while (idx !== shared.edge1Start) {
+  // Determine which direction poly2's shared edge goes relative to poly1
+  // poly1 goes from edge1Start -> edge1End
+  // poly2 goes from edge2Start -> edge2End
+  // They should be opposite for adjacent polygons
+
+  const p1Start = poly1[shared.edge1Start];
+  const p2Start = poly2[shared.edge2Start];
+  const p2End = poly2[shared.edge2End];
+
+  // Check if poly2's edge is in same or opposite direction
+  const dist_p1Start_p2Start = Math.hypot(p1Start.x - p2Start.x, p1Start.y - p2Start.y);
+  const dist_p1Start_p2End = Math.hypot(p1Start.x - p2End.x, p1Start.y - p2End.y);
+
+  // If p1Start is closer to p2End, edges are in opposite directions (normal case)
+  const oppositeDirection = dist_p1Start_p2End < dist_p1Start_p2Start;
+
+  // Walk poly1: add all vertices except skip the shared edge endpoint
+  // Start from edge1End, go around, stop before edge1Start
+  for (let i = 0; i < poly1.length; i++) {
+    const idx = (shared.edge1End + i) % poly1.length;
+    // Stop when we reach edge1Start (the start of shared edge)
+    if (idx === shared.edge1Start) break;
     result.push(poly1[idx]);
-    idx = (idx + 1) % poly1.length;
   }
 
-  // Now we're at edge1Start in poly1, which connects to edge2End or edge2Start in poly2
-  // The shared edge in poly2 goes in opposite direction (b1->b2 matches a2->a1 or vice versa)
-  // We need to walk poly2 starting from the point that connects
-
-  // Check which end of poly2's shared edge is closer to poly1's edge start
-  const p1EdgeStart = poly1[shared.edge1Start];
-  const p2EdgeStart = poly2[shared.edge2Start];
-  const p2EdgeEnd = poly2[shared.edge2End];
-
-  const distToStart = Math.hypot(p1EdgeStart.x - p2EdgeStart.x, p1EdgeStart.y - p2EdgeStart.y);
-  const distToEnd = Math.hypot(p1EdgeStart.x - p2EdgeEnd.x, p1EdgeStart.y - p2EdgeEnd.y);
-
-  if (distToEnd < distToStart) {
-    // poly2's edge end connects to poly1's edge start
-    // Walk poly2 from edge2End+1 to edge2Start
-    idx = (shared.edge2End + 1) % poly2.length;
-    while (idx !== shared.edge2End) {
+  // Now add vertices from poly2, skipping the shared edge
+  if (oppositeDirection) {
+    // poly2 edge goes edge2Start -> edge2End, but matches p1End -> p1Start
+    // So we continue from edge2End, going forward, until we reach edge2Start
+    for (let i = 0; i < poly2.length; i++) {
+      const idx = (shared.edge2End + i) % poly2.length;
+      if (idx === shared.edge2Start) break;
       result.push(poly2[idx]);
-      idx = (idx + 1) % poly2.length;
     }
   } else {
-    // poly2's edge start connects to poly1's edge start
-    // Walk poly2 backwards from edge2Start-1 to edge2End
-    idx = (shared.edge2Start - 1 + poly2.length) % poly2.length;
-    while (idx !== shared.edge2Start) {
+    // Same direction - walk backwards from edge2Start
+    for (let i = 0; i < poly2.length; i++) {
+      const idx = (shared.edge2Start - i + poly2.length) % poly2.length;
+      if (idx === shared.edge2End) break;
       result.push(poly2[idx]);
-      idx = (idx - 1 + poly2.length) % poly2.length;
     }
   }
 
-  return result.length >= 3 ? result : null;
+  // Validate result
+  if (result.length < 3) return null;
+
+  // Check area is positive
+  const area = polygonArea(result);
+  if (area < 100) return null;
+
+  return result;
 }
 
 /**
