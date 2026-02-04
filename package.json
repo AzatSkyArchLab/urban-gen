@@ -14,10 +14,6 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
-    "@turf/boolean-overlap": "^7.3.3",
-    "@turf/boolean-touches": "^7.3.3",
-    "@turf/helpers": "^7.3.3",
-    "@turf/union": "^7.3.3",
     "maplibre-gl": "^5.17.0"
   }
 }

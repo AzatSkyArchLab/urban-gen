@@ -14,8 +14,6 @@ import {
   isPointInPolygon,
   polygonArea
 } from './geometry';
-import union from '@turf/union';
-import { polygon as turfPolygon, featureCollection } from '@turf/helpers';
 
 // Increased tolerance to handle tile boundary gaps from Martin
 const MERGE_TOLERANCE = 30; // pixels (increased for better tile gap handling)
@@ -352,38 +350,82 @@ function polygonsShareEdge(poly1: Point[], poly2: Point[]): boolean {
 }
 
 /**
- * Convert pixel polygon to Turf polygon
+ * Find the shared edge between two polygons
+ * Returns indices of the shared edge start in both polygons, or null if not found
  */
-function toTurfPolygon(poly: Point[]): GeoJSON.Feature<GeoJSON.Polygon> {
-  const coords = poly.map(p => [p.x, p.y] as [number, number]);
-  // Close the polygon
-  if (coords.length > 0 && (coords[0][0] !== coords[coords.length - 1][0] ||
-      coords[0][1] !== coords[coords.length - 1][1])) {
-    coords.push(coords[0]);
+function findSharedEdge(
+  poly1: Point[],
+  poly2: Point[],
+  tolerance = 5
+): { edge1Start: number; edge1End: number; edge2Start: number; edge2End: number } | null {
+  for (let i = 0; i < poly1.length; i++) {
+    const a1 = poly1[i];
+    const a2 = poly1[(i + 1) % poly1.length];
+
+    for (let j = 0; j < poly2.length; j++) {
+      const b1 = poly2[j];
+      const b2 = poly2[(j + 1) % poly2.length];
+
+      if (edgesShareSegment(a1, a2, b1, b2, tolerance)) {
+        return {
+          edge1Start: i,
+          edge1End: (i + 1) % poly1.length,
+          edge2Start: j,
+          edge2End: (j + 1) % poly2.length
+        };
+      }
+    }
   }
-  return turfPolygon([coords]);
+  return null;
 }
 
 /**
- * Convert Turf polygon back to Point[]
+ * Merge two polygons that share an edge
  */
-function fromTurfPolygon(feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>): Point[][] {
-  const result: Point[][] = [];
+function mergeTwoPolygons(poly1: Point[], poly2: Point[]): Point[] | null {
+  const shared = findSharedEdge(poly1, poly2);
+  if (!shared) return null;
 
-  if (feature.geometry.type === 'Polygon') {
-    const ring = feature.geometry.coordinates[0];
-    // Remove closing point
-    const pts = ring.slice(0, -1).map(c => ({ x: c[0], y: c[1] }));
-    if (pts.length >= 3) result.push(pts);
-  } else if (feature.geometry.type === 'MultiPolygon') {
-    for (const polygon of feature.geometry.coordinates) {
-      const ring = polygon[0];
-      const pts = ring.slice(0, -1).map(c => ({ x: c[0], y: c[1] }));
-      if (pts.length >= 3) result.push(pts);
+  const result: Point[] = [];
+
+  // Walk poly1 from after shared edge to before shared edge
+  let idx = shared.edge1End;
+  while (idx !== shared.edge1Start) {
+    result.push(poly1[idx]);
+    idx = (idx + 1) % poly1.length;
+  }
+
+  // Now we're at edge1Start in poly1, which connects to edge2End or edge2Start in poly2
+  // The shared edge in poly2 goes in opposite direction (b1->b2 matches a2->a1 or vice versa)
+  // We need to walk poly2 starting from the point that connects
+
+  // Check which end of poly2's shared edge is closer to poly1's edge start
+  const p1EdgeStart = poly1[shared.edge1Start];
+  const p2EdgeStart = poly2[shared.edge2Start];
+  const p2EdgeEnd = poly2[shared.edge2End];
+
+  const distToStart = Math.hypot(p1EdgeStart.x - p2EdgeStart.x, p1EdgeStart.y - p2EdgeStart.y);
+  const distToEnd = Math.hypot(p1EdgeStart.x - p2EdgeEnd.x, p1EdgeStart.y - p2EdgeEnd.y);
+
+  if (distToEnd < distToStart) {
+    // poly2's edge end connects to poly1's edge start
+    // Walk poly2 from edge2End+1 to edge2Start
+    idx = (shared.edge2End + 1) % poly2.length;
+    while (idx !== shared.edge2End) {
+      result.push(poly2[idx]);
+      idx = (idx + 1) % poly2.length;
+    }
+  } else {
+    // poly2's edge start connects to poly1's edge start
+    // Walk poly2 backwards from edge2Start-1 to edge2End
+    idx = (shared.edge2Start - 1 + poly2.length) % poly2.length;
+    while (idx !== shared.edge2Start) {
+      result.push(poly2[idx]);
+      idx = (idx - 1 + poly2.length) % poly2.length;
     }
   }
 
-  return result;
+  return result.length >= 3 ? result : null;
 }
 
 /**
@@ -394,79 +436,32 @@ function mergeTouchingPolygons(polygons: Point[][]): Point[][] {
 
   console.log(`[PolygonClipper] Merging ${polygons.length} polygons...`);
 
-  // Build adjacency - which polygons touch
-  const n = polygons.length;
-  const adjacency: Set<number>[] = Array.from({ length: n }, () => new Set());
+  // Keep merging until no more merges possible
+  let current = [...polygons];
+  let merged = true;
 
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (polygonsShareEdge(polygons[i], polygons[j])) {
-        adjacency[i].add(j);
-        adjacency[j].add(i);
-      }
-    }
-  }
+  while (merged) {
+    merged = false;
 
-  // Find connected components using DFS
-  const visited = new Set<number>();
-  const components: number[][] = [];
-
-  for (let i = 0; i < n; i++) {
-    if (visited.has(i)) continue;
-
-    const component: number[] = [];
-    const stack = [i];
-
-    while (stack.length > 0) {
-      const node = stack.pop()!;
-      if (visited.has(node)) continue;
-      visited.add(node);
-      component.push(node);
-
-      for (const neighbor of adjacency[node]) {
-        if (!visited.has(neighbor)) {
-          stack.push(neighbor);
+    for (let i = 0; i < current.length && !merged; i++) {
+      for (let j = i + 1; j < current.length && !merged; j++) {
+        if (polygonsShareEdge(current[i], current[j])) {
+          const mergedPoly = mergeTwoPolygons(current[i], current[j]);
+          if (mergedPoly && mergedPoly.length >= 3) {
+            // Remove both polygons and add merged one
+            const newList = current.filter((_, idx) => idx !== i && idx !== j);
+            newList.push(mergedPoly);
+            current = newList;
+            merged = true;
+            console.log(`[PolygonClipper] Merged polygons ${i} and ${j}, now have ${current.length} polygons`);
+          }
         }
       }
     }
-
-    components.push(component);
   }
 
-  console.log(`[PolygonClipper] Found ${components.length} groups of touching polygons`);
-
-  // Merge each component
-  const result: Point[][] = [];
-
-  for (const component of components) {
-    if (component.length === 1) {
-      result.push(polygons[component[0]]);
-      continue;
-    }
-
-    // Use Turf.js to merge polygons in this component
-    try {
-      let merged: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> = toTurfPolygon(polygons[component[0]]);
-
-      for (let i = 1; i < component.length; i++) {
-        const poly = toTurfPolygon(polygons[component[i]]);
-        const unionResult = union(featureCollection([merged, poly]));
-        if (unionResult) {
-          merged = unionResult;
-        }
-      }
-
-      const mergedPolygons = fromTurfPolygon(merged);
-      result.push(...mergedPolygons);
-    } catch (e) {
-      console.warn('[PolygonClipper] Merge failed, keeping original polygons:', e);
-      for (const idx of component) {
-        result.push(polygons[idx]);
-      }
-    }
-  }
-
-  return result;
+  console.log(`[PolygonClipper] After merge: ${current.length} polygons`);
+  return current;
 }
 
 /**
