@@ -215,21 +215,36 @@ export class GridGeneratorManager {
       maxLat = Math.max(maxLat, lat);
     }
 
-    // Expand bounds slightly
-    const padding = 0.001; // ~100m
-    minLng -= padding;
-    maxLng += padding;
-    minLat -= padding;
-    maxLat += padding;
+    // Expand bounds for red lines (smaller padding)
+    const redLinesPadding = 0.001; // ~100m
+    const redLinesMinLng = minLng - redLinesPadding;
+    const redLinesMaxLng = maxLng + redLinesPadding;
+    const redLinesMinLat = minLat - redLinesPadding;
+    const redLinesMaxLat = maxLat + redLinesPadding;
 
-    // Convert to screen coordinates
-    const sw = map.project([minLng, minLat]);
-    const ne = map.project([maxLng, maxLat]);
+    // Expand bounds for roads (larger padding for connection points)
+    const roadsPadding = 0.003; // ~300m - roads need larger area for connections
+    const roadsMinLng = minLng - roadsPadding;
+    const roadsMaxLng = maxLng + roadsPadding;
+    const roadsMinLat = minLat - roadsPadding;
+    const roadsMaxLat = maxLat + roadsPadding;
 
-    // Query features in bounding box
-    const bbox: [maplibregl.PointLike, maplibregl.PointLike] = [
-      [Math.min(sw.x, ne.x), Math.min(sw.y, ne.y)],
-      [Math.max(sw.x, ne.x), Math.max(sw.y, ne.y)]
+    // Convert to screen coordinates for red lines
+    const redLinesSw = map.project([redLinesMinLng, redLinesMinLat]);
+    const redLinesNe = map.project([redLinesMaxLng, redLinesMaxLat]);
+
+    const redLinesBbox: [maplibregl.PointLike, maplibregl.PointLike] = [
+      [Math.min(redLinesSw.x, redLinesNe.x), Math.min(redLinesSw.y, redLinesNe.y)],
+      [Math.max(redLinesSw.x, redLinesNe.x), Math.max(redLinesSw.y, redLinesNe.y)]
+    ];
+
+    // Convert to screen coordinates for roads
+    const roadsSw = map.project([roadsMinLng, roadsMinLat]);
+    const roadsNe = map.project([roadsMaxLng, roadsMaxLat]);
+
+    const roadsBbox: [maplibregl.PointLike, maplibregl.PointLike] = [
+      [Math.min(roadsSw.x, roadsNe.x), Math.min(roadsSw.y, roadsNe.y)],
+      [Math.max(roadsSw.x, roadsNe.x), Math.max(roadsSw.y, roadsNe.y)]
     ];
 
     // Debug: list all available layers
@@ -237,19 +252,19 @@ export class GridGeneratorManager {
     const layerIds = style?.layers?.map(l => l.id) || [];
     console.log('[GridGen] Available layers:', layerIds);
 
-    // Query ALL features first to see what's there
-    const allFeatures = map.queryRenderedFeatures(bbox);
+    // Query ALL features first to see what's there (use larger roads bbox)
+    const allFeatures = map.queryRenderedFeatures(roadsBbox);
     const uniqueSources = [...new Set(allFeatures.map(f => f.source))];
     const uniqueLayers = [...new Set(allFeatures.map(f => f.layer?.id))];
     console.log('[GridGen] Features in bbox - sources:', uniqueSources, 'layers:', uniqueLayers);
 
-    // Query red_lines layer (layer id from LayerConfig)
-    const redLinesRaw = map.queryRenderedFeatures(bbox, {
+    // Query red_lines layer (layer id from LayerConfig) - use smaller bbox
+    const redLinesRaw = map.queryRenderedFeatures(redLinesBbox, {
       layers: ['red-lines']
     });
 
-    // Query osi_sush layer (layer id from LayerConfig)
-    const roadsRaw = map.queryRenderedFeatures(bbox, {
+    // Query osi_sush layer (layer id from LayerConfig) - use larger bbox for connections
+    const roadsRaw = map.queryRenderedFeatures(roadsBbox, {
       layers: ['osi-sush']
     });
 

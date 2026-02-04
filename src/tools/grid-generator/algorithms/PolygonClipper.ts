@@ -15,7 +15,7 @@ import {
 } from './geometry';
 
 // Increased tolerance to handle tile boundary gaps from Martin
-const MERGE_TOLERANCE = 20; // pixels (was 5)
+const MERGE_TOLERANCE = 30; // pixels (increased for better tile gap handling)
 
 interface SplitPoint {
   point: Point;
