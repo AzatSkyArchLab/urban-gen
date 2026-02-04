@@ -5,6 +5,7 @@
  * 1. Merge connected line segments into continuous polylines
  * 2. Extend polylines to ensure they cross polygon boundaries
  * 3. Split polygon iteratively by each line
+ * 4. Merge touching polygons back together
  */
 
 import type { Point, Coordinate, SubPolygon } from '../types';
@@ -13,6 +14,8 @@ import {
   isPointInPolygon,
   polygonArea
 } from './geometry';
+import union from '@turf/union';
+import { polygon as turfPolygon, featureCollection } from '@turf/helpers';
 
 // Increased tolerance to handle tile boundary gaps from Martin
 const MERGE_TOLERANCE = 30; // pixels (increased for better tile gap handling)
@@ -260,7 +263,210 @@ export function splitPolygonByLines(polygon: Point[], lines: Point[][]): Point[]
 
   console.log(`[PolygonClipper] Result: ${result.length} sub-polygons`);
 
-  return result.length > 0 ? result : [polygon];
+  // Merge touching polygons
+  const mergedPolygons = mergeTouchingPolygons(result.length > 0 ? result : [polygon]);
+  console.log(`[PolygonClipper] After merge: ${mergedPolygons.length} sub-polygons`);
+
+  return mergedPolygons;
+}
+
+/**
+ * Check if two edges share a segment (not just a point)
+ */
+function edgesShareSegment(
+  a1: Point, a2: Point,
+  b1: Point, b2: Point,
+  tolerance = 5
+): boolean {
+  // Check if the edges are collinear and overlapping
+  const dx1 = a2.x - a1.x;
+  const dy1 = a2.y - a1.y;
+  const dx2 = b2.x - b1.x;
+  const dy2 = b2.y - b1.y;
+
+  // Check parallelism
+  const cross = Math.abs(dx1 * dy2 - dy1 * dx2);
+  const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+  const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+
+  if (len1 < 0.001 || len2 < 0.001) return false;
+
+  // Normalize cross product
+  const normalizedCross = cross / (len1 * len2);
+  if (normalizedCross > 0.1) return false; // Not parallel
+
+  // Check if b1 is on line a1-a2
+  const dist1 = pointToLineDistance(b1, a1, a2);
+  const dist2 = pointToLineDistance(b2, a1, a2);
+
+  if (dist1 > tolerance || dist2 > tolerance) return false;
+
+  // Check overlap - project points onto line
+  const t1 = projectPointOnLine(b1, a1, a2);
+  const t2 = projectPointOnLine(b2, a1, a2);
+  const tMin = Math.min(t1, t2);
+  const tMax = Math.max(t1, t2);
+
+  // Check if there's overlap with [0, 1]
+  return tMax > 0.01 && tMin < 0.99;
+}
+
+function pointToLineDistance(p: Point, l1: Point, l2: Point): number {
+  const dx = l2.x - l1.x;
+  const dy = l2.y - l1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return Math.sqrt((p.x - l1.x) ** 2 + (p.y - l1.y) ** 2);
+
+  const t = Math.max(0, Math.min(1, ((p.x - l1.x) * dx + (p.y - l1.y) * dy) / (len * len)));
+  const projX = l1.x + t * dx;
+  const projY = l1.y + t * dy;
+  return Math.sqrt((p.x - projX) ** 2 + (p.y - projY) ** 2);
+}
+
+function projectPointOnLine(p: Point, l1: Point, l2: Point): number {
+  const dx = l2.x - l1.x;
+  const dy = l2.y - l1.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 0.001) return 0;
+  return ((p.x - l1.x) * dx + (p.y - l1.y) * dy) / len2;
+}
+
+/**
+ * Check if two polygons share an edge (are touching)
+ */
+function polygonsShareEdge(poly1: Point[], poly2: Point[]): boolean {
+  for (let i = 0; i < poly1.length; i++) {
+    const a1 = poly1[i];
+    const a2 = poly1[(i + 1) % poly1.length];
+
+    for (let j = 0; j < poly2.length; j++) {
+      const b1 = poly2[j];
+      const b2 = poly2[(j + 1) % poly2.length];
+
+      if (edgesShareSegment(a1, a2, b1, b2)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Convert pixel polygon to Turf polygon
+ */
+function toTurfPolygon(poly: Point[]): GeoJSON.Feature<GeoJSON.Polygon> {
+  const coords = poly.map(p => [p.x, p.y] as [number, number]);
+  // Close the polygon
+  if (coords.length > 0 && (coords[0][0] !== coords[coords.length - 1][0] ||
+      coords[0][1] !== coords[coords.length - 1][1])) {
+    coords.push(coords[0]);
+  }
+  return turfPolygon([coords]);
+}
+
+/**
+ * Convert Turf polygon back to Point[]
+ */
+function fromTurfPolygon(feature: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>): Point[][] {
+  const result: Point[][] = [];
+
+  if (feature.geometry.type === 'Polygon') {
+    const ring = feature.geometry.coordinates[0];
+    // Remove closing point
+    const pts = ring.slice(0, -1).map(c => ({ x: c[0], y: c[1] }));
+    if (pts.length >= 3) result.push(pts);
+  } else if (feature.geometry.type === 'MultiPolygon') {
+    for (const polygon of feature.geometry.coordinates) {
+      const ring = polygon[0];
+      const pts = ring.slice(0, -1).map(c => ({ x: c[0], y: c[1] }));
+      if (pts.length >= 3) result.push(pts);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Merge all touching polygons into larger polygons
+ */
+function mergeTouchingPolygons(polygons: Point[][]): Point[][] {
+  if (polygons.length <= 1) return polygons;
+
+  console.log(`[PolygonClipper] Merging ${polygons.length} polygons...`);
+
+  // Build adjacency - which polygons touch
+  const n = polygons.length;
+  const adjacency: Set<number>[] = Array.from({ length: n }, () => new Set());
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (polygonsShareEdge(polygons[i], polygons[j])) {
+        adjacency[i].add(j);
+        adjacency[j].add(i);
+      }
+    }
+  }
+
+  // Find connected components using DFS
+  const visited = new Set<number>();
+  const components: number[][] = [];
+
+  for (let i = 0; i < n; i++) {
+    if (visited.has(i)) continue;
+
+    const component: number[] = [];
+    const stack = [i];
+
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      if (visited.has(node)) continue;
+      visited.add(node);
+      component.push(node);
+
+      for (const neighbor of adjacency[node]) {
+        if (!visited.has(neighbor)) {
+          stack.push(neighbor);
+        }
+      }
+    }
+
+    components.push(component);
+  }
+
+  console.log(`[PolygonClipper] Found ${components.length} groups of touching polygons`);
+
+  // Merge each component
+  const result: Point[][] = [];
+
+  for (const component of components) {
+    if (component.length === 1) {
+      result.push(polygons[component[0]]);
+      continue;
+    }
+
+    // Use Turf.js to merge polygons in this component
+    try {
+      let merged: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> = toTurfPolygon(polygons[component[0]]);
+
+      for (let i = 1; i < component.length; i++) {
+        const poly = toTurfPolygon(polygons[component[i]]);
+        const unionResult = union(featureCollection([merged, poly]));
+        if (unionResult) {
+          merged = unionResult;
+        }
+      }
+
+      const mergedPolygons = fromTurfPolygon(merged);
+      result.push(...mergedPolygons);
+    } catch (e) {
+      console.warn('[PolygonClipper] Merge failed, keeping original polygons:', e);
+      for (const idx of component) {
+        result.push(polygons[idx]);
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
