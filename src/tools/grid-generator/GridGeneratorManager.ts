@@ -54,7 +54,9 @@ export class GridGeneratorManager {
       subPolygons: [],
       isProcessing: false,
       currentGlobalVariant: 0,
-      totalVariants: 0
+      totalVariants: 0,
+      generationZoom: 0,
+      generationCenter: null
     };
   }
 
@@ -115,6 +117,10 @@ export class GridGeneratorManager {
       const zoom = map.getZoom();
       const mpp = metersPerPixel(center.lat, zoom);
       const cellSizePixels = GRID_CONFIG.CELL_SIZE / mpp;
+
+      // Store generation parameters for later use
+      this.state.generationZoom = zoom;
+      this.state.generationCenter = [center.lng, center.lat];
 
       // Create sub-polygons
       const subPolygons: SubPolygon[] = [];
@@ -387,12 +393,65 @@ export class GridGeneratorManager {
     const map = this.mapManager.getMap();
     if (!map) return;
 
+    const currentZoom = map.getZoom();
+    const zoomDiff = Math.abs(currentZoom - this.state.generationZoom);
+
+    // If zoom changed significantly, recalculate blocks
+    if (zoomDiff > 0.5 && this.state.subPolygons.length > 0) {
+      console.log('[GridGen] Zoom changed, regenerating blocks...');
+      this.regenerateBlocksAtCurrentZoom();
+    }
+
     const unproject = (point: Point) => {
       const ll = map.unproject([point.x, point.y]);
       return { lng: ll.lng, lat: ll.lat };
     };
 
     this.gridLayer.update(this.state.subPolygons, true, unproject);
+  }
+
+  /**
+   * Regenerate blocks at current zoom level
+   */
+  private regenerateBlocksAtCurrentZoom(): void {
+    const map = this.mapManager.getMap();
+    if (!map) return;
+
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    const mpp = metersPerPixel(center.lat, zoom);
+    const cellSizePixels = GRID_CONFIG.CELL_SIZE / mpp;
+
+    const project = (lngLat: [number, number]) => map.project(lngLat);
+
+    // Regenerate blocks for each valid sub-polygon
+    for (const subPoly of this.state.subPolygons) {
+      if (!subPoly.isValid) continue;
+
+      // Recalculate pixel coords from geo coords
+      subPoly.pixelCoords = subPoly.coordinates.map(c => project(c));
+
+      // Regenerate grid
+      const gridResult = generateGrid(subPoly.pixelCoords, cellSizePixels);
+      if (gridResult) {
+        subPoly.gridCells = gridResult.cells;
+        subPoly.bbox = gridResult.bbox;
+      }
+
+      // Regenerate variants
+      const variants = generateVariants(subPoly.pixelCoords, cellSizePixels);
+      subPoly.variants = variants;
+
+      // Update connections for current variant
+      if (variants.length > 0) {
+        const roadsPixels = lineFeaturesToPixels(this.state.roads, project);
+        this.updateConnections(subPoly, roadsPixels);
+      }
+    }
+
+    // Update stored zoom
+    this.state.generationZoom = zoom;
+    this.state.generationCenter = [center.lng, center.lat];
   }
 
   /**

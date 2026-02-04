@@ -1,13 +1,10 @@
 /**
- * PolygonClipper - splits polygon by lines using planar graph face detection
+ * PolygonClipper - splits polygon by lines (red lines)
  *
  * Algorithm:
- * 1. Take polygon boundary edges
- * 2. Clip red lines to polygon interior
- * 3. Find all intersections between edges
- * 4. Build planar graph from edges
- * 5. Find all closed faces (minimal cycles) in the graph
- * 6. Each face = one sub-polygon
+ * 1. Merge connected line segments into continuous polylines
+ * 2. Extend polylines to ensure they cross polygon boundaries
+ * 3. Split polygon iteratively by each line
  */
 
 import type { Point, Coordinate, SubPolygon } from '../types';
@@ -17,309 +14,196 @@ import {
   polygonArea
 } from './geometry';
 
-const EPSILON = 0.0001;
-const POINT_TOLERANCE = 2; // pixels - tolerance for merging nearby points
+const MERGE_TOLERANCE = 5; // pixels
 
-interface GraphNode {
+interface SplitPoint {
   point: Point;
-  edges: number[]; // indices of edges connected to this node
-}
-
-interface GraphEdge {
-  nodeA: number;
-  nodeB: number;
-  visited: boolean;
-  visitedReverse: boolean;
+  edgeIdx: number;
+  t: number;
 }
 
 /**
- * Check if two points are close enough to be considered the same
+ * Check if two points are close enough to merge
  */
-function pointsEqual(p1: Point, p2: Point): boolean {
-  return Math.abs(p1.x - p2.x) < POINT_TOLERANCE && Math.abs(p1.y - p2.y) < POINT_TOLERANCE;
+function pointsClose(p1: Point, p2: Point, tolerance = MERGE_TOLERANCE): boolean {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  return Math.sqrt(dx * dx + dy * dy) < tolerance;
 }
 
 /**
- * Find or create a node for a point
+ * Merge connected line segments into continuous polylines
  */
-function findOrCreateNode(nodes: GraphNode[], point: Point): number {
-  for (let i = 0; i < nodes.length; i++) {
-    if (pointsEqual(nodes[i].point, point)) {
-      return i;
-    }
-  }
-  nodes.push({ point: { x: point.x, y: point.y }, edges: [] });
-  return nodes.length - 1;
-}
+function mergeLineSegments(lines: Point[][]): Point[][] {
+  if (lines.length === 0) return [];
 
-/**
- * Clip a line segment to polygon interior
- * Returns the part of the segment that is inside the polygon
- */
-function clipSegmentToPolygon(p1: Point, p2: Point, polygon: Point[]): [Point, Point] | null {
-  // Find intersections with polygon edges
-  const intersections: { point: Point; t: number }[] = [];
+  const remaining = lines.map(line => [...line]);
+  const merged: Point[][] = [];
 
-  for (let i = 0; i < polygon.length; i++) {
-    const a = polygon[i];
-    const b = polygon[(i + 1) % polygon.length];
-    const inter = segmentIntersection(p1, p2, a, b);
-    if (inter) {
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const t = Math.abs(dx) > Math.abs(dy)
-        ? (inter.x - p1.x) / dx
-        : (inter.y - p1.y) / dy;
-      intersections.push({ point: inter, t });
-    }
-  }
+  while (remaining.length > 0) {
+    let current = remaining.shift()!;
+    let changed = true;
 
-  // Sort by t parameter
-  intersections.sort((a, b) => a.t - b.t);
+    while (changed) {
+      changed = false;
 
-  // Check endpoints
-  const p1Inside = isPointInPolygon(p1, polygon);
-  const p2Inside = isPointInPolygon(p2, polygon);
+      for (let i = remaining.length - 1; i >= 0; i--) {
+        const segment = remaining[i];
+        const segStart = segment[0];
+        const segEnd = segment[segment.length - 1];
+        const curStart = current[0];
+        const curEnd = current[current.length - 1];
 
-  if (intersections.length === 0) {
-    // No intersections - either fully inside or fully outside
-    if (p1Inside && p2Inside) {
-      return [p1, p2];
-    }
-    return null;
-  }
-
-  if (intersections.length === 1) {
-    // One intersection - one endpoint inside
-    if (p1Inside) {
-      return [p1, intersections[0].point];
-    } else if (p2Inside) {
-      return [intersections[0].point, p2];
-    }
-    return null;
-  }
-
-  // Multiple intersections - take the segment between first entry and last exit
-  // For simplicity, return segment between first two intersections if both endpoints outside
-  if (!p1Inside && !p2Inside && intersections.length >= 2) {
-    return [intersections[0].point, intersections[1].point];
-  }
-
-  // p1 inside, p2 outside
-  if (p1Inside) {
-    return [p1, intersections[0].point];
-  }
-  // p1 outside, p2 inside
-  if (p2Inside) {
-    return [intersections[intersections.length - 1].point, p2];
-  }
-
-  return null;
-}
-
-/**
- * Find all intersections between segments and split them
- */
-function findAllIntersections(segments: [Point, Point][]): [Point, Point][] {
-  const result: [Point, Point][] = [];
-
-  for (let i = 0; i < segments.length; i++) {
-    const [a1, a2] = segments[i];
-    const splitPoints: { point: Point; t: number }[] = [
-      { point: a1, t: 0 },
-      { point: a2, t: 1 }
-    ];
-
-    // Find intersections with all other segments
-    for (let j = 0; j < segments.length; j++) {
-      if (i === j) continue;
-      const [b1, b2] = segments[j];
-      const inter = segmentIntersection(a1, a2, b1, b2);
-      if (inter) {
-        const dx = a2.x - a1.x;
-        const dy = a2.y - a1.y;
-        const t = Math.abs(dx) > Math.abs(dy)
-          ? (inter.x - a1.x) / dx
-          : (inter.y - a1.y) / dy;
-        if (t > EPSILON && t < 1 - EPSILON) {
-          splitPoints.push({ point: inter, t });
+        if (pointsClose(segEnd, curStart)) {
+          current = [...segment.slice(0, -1), ...current];
+          remaining.splice(i, 1);
+          changed = true;
+        } else if (pointsClose(curEnd, segStart)) {
+          current = [...current.slice(0, -1), ...segment];
+          remaining.splice(i, 1);
+          changed = true;
+        } else if (pointsClose(segStart, curStart)) {
+          current = [...segment.reverse().slice(0, -1), ...current];
+          remaining.splice(i, 1);
+          changed = true;
+        } else if (pointsClose(curEnd, segEnd)) {
+          current = [...current.slice(0, -1), ...segment.reverse()];
+          remaining.splice(i, 1);
+          changed = true;
         }
       }
     }
 
-    // Sort by t and create sub-segments
-    splitPoints.sort((a, b) => a.t - b.t);
-    for (let k = 0; k < splitPoints.length - 1; k++) {
-      const p1 = splitPoints[k].point;
-      const p2 = splitPoints[k + 1].point;
-      // Skip degenerate segments
-      const len = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
-      if (len > POINT_TOLERANCE) {
-        result.push([p1, p2]);
+    merged.push(current);
+  }
+
+  return merged;
+}
+
+/**
+ * Extend a polyline to cross polygon bounds
+ */
+function extendLine(line: Point[], extendDist: number): Point[] {
+  if (line.length < 2) return line;
+
+  const p1 = line[0];
+  const p2 = line[line.length - 1];
+
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+
+  if (len < 0.001) return line;
+
+  const ux = dx / len;
+  const uy = dy / len;
+
+  return [
+    { x: p1.x - ux * extendDist, y: p1.y - uy * extendDist },
+    ...line,
+    { x: p2.x + ux * extendDist, y: p2.y + uy * extendDist }
+  ];
+}
+
+/**
+ * Check if line has any point inside or near polygon bounds
+ */
+function lineNearPolygon(line: Point[], polyBounds: { minX: number; maxX: number; minY: number; maxY: number }): boolean {
+  const margin = 50;
+  for (const pt of line) {
+    if (pt.x >= polyBounds.minX - margin && pt.x <= polyBounds.maxX + margin &&
+        pt.y >= polyBounds.minY - margin && pt.y <= polyBounds.maxY + margin) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Find intersection points between polygon edges and a line
+ */
+function findIntersections(polygon: Point[], line: Point[]): SplitPoint[] {
+  const intersections: SplitPoint[] = [];
+
+  for (let i = 0; i < polygon.length; i++) {
+    const p1 = polygon[i];
+    const p2 = polygon[(i + 1) % polygon.length];
+
+    for (let j = 0; j < line.length - 1; j++) {
+      const l1 = line[j];
+      const l2 = line[j + 1];
+
+      const inter = segmentIntersection(p1, p2, l1, l2);
+      if (inter) {
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const t = len > 0
+          ? Math.sqrt((inter.x - p1.x) ** 2 + (inter.y - p1.y) ** 2) / len
+          : 0;
+
+        intersections.push({ point: inter, edgeIdx: i, t });
       }
     }
   }
 
-  return result;
+  // Sort by edge index, then by t
+  intersections.sort((a, b) => {
+    if (a.edgeIdx !== b.edgeIdx) return a.edgeIdx - b.edgeIdx;
+    return a.t - b.t;
+  });
+
+  return intersections;
 }
 
 /**
- * Build a planar graph from segments
+ * Split polygon by a single line (needs exactly 2 intersection points)
  */
-function buildGraph(segments: [Point, Point][]): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const nodes: GraphNode[] = [];
-  const edges: GraphEdge[] = [];
+function splitPolygonBySingleLine(polygon: Point[], line: Point[]): Point[][] {
+  const intersections = findIntersections(polygon, line);
 
-  for (const [p1, p2] of segments) {
-    const nodeA = findOrCreateNode(nodes, p1);
-    const nodeB = findOrCreateNode(nodes, p2);
-
-    if (nodeA === nodeB) continue; // Skip zero-length edges
-
-    const edgeIdx = edges.length;
-    edges.push({ nodeA, nodeB, visited: false, visitedReverse: false });
-    nodes[nodeA].edges.push(edgeIdx);
-    nodes[nodeB].edges.push(edgeIdx);
+  if (intersections.length < 2) {
+    return [polygon];
   }
 
-  return { nodes, edges };
-}
+  // Take first two intersections
+  let int1 = intersections[0];
+  let int2 = intersections[1];
 
-/**
- * Calculate angle from node to another node via edge
- */
-function getEdgeAngle(nodes: GraphNode[], fromNode: number, toNode: number): number {
-  const from = nodes[fromNode].point;
-  const to = nodes[toNode].point;
-  return Math.atan2(to.y - from.y, to.x - from.x);
-}
-
-/**
- * Find the next edge in a clockwise traversal (rightmost turn)
- */
-function findNextEdge(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
-  currentNode: number,
-  prevNode: number
-): { edgeIdx: number; nextNode: number } | null {
-  const node = nodes[currentNode];
-  const incomingAngle = getEdgeAngle(nodes, currentNode, prevNode);
-
-  let bestEdge = -1;
-  let bestNode = -1;
-  let bestAngle = -Infinity;
-
-  for (const edgeIdx of node.edges) {
-    const edge = edges[edgeIdx];
-    const otherNode = edge.nodeA === currentNode ? edge.nodeB : edge.nodeA;
-
-    if (otherNode === prevNode) continue; // Don't go back
-
-    // Check if this direction is already visited
-    const isForward = edge.nodeA === currentNode;
-    if (isForward && edge.visited) continue;
-    if (!isForward && edge.visitedReverse) continue;
-
-    const outgoingAngle = getEdgeAngle(nodes, currentNode, otherNode);
-    // Calculate the signed angle difference (we want rightmost turn = smallest positive angle)
-    let angleDiff = outgoingAngle - incomingAngle;
-    // Normalize to [-PI, PI]
-    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-    if (angleDiff > bestAngle) {
-      bestAngle = angleDiff;
-      bestEdge = edgeIdx;
-      bestNode = otherNode;
-    }
+  // Ensure int1 comes before int2
+  if (int1.edgeIdx > int2.edgeIdx || (int1.edgeIdx === int2.edgeIdx && int1.t > int2.t)) {
+    [int1, int2] = [int2, int1];
   }
 
-  if (bestEdge === -1) return null;
-  return { edgeIdx: bestEdge, nextNode: bestNode };
-}
+  const poly1: Point[] = [];
+  const poly2: Point[] = [];
 
-/**
- * Extract all faces from the planar graph
- */
-function extractFaces(nodes: GraphNode[], edges: GraphEdge[]): Point[][] {
-  const faces: Point[][] = [];
+  // Build first polygon: from int1 to int2
+  poly1.push(int1.point);
+  for (let i = int1.edgeIdx + 1; i <= int2.edgeIdx; i++) {
+    poly1.push(polygon[i]);
+  }
+  poly1.push(int2.point);
 
-  // Try to find faces starting from each unvisited edge direction
-  for (let startEdgeIdx = 0; startEdgeIdx < edges.length; startEdgeIdx++) {
-    const startEdge = edges[startEdgeIdx];
+  // Build second polygon: from int2 back to int1
+  poly2.push(int2.point);
+  for (let i = int2.edgeIdx + 1; i < polygon.length; i++) {
+    poly2.push(polygon[i]);
+  }
+  for (let i = 0; i <= int1.edgeIdx; i++) {
+    poly2.push(polygon[i]);
+  }
+  poly2.push(int1.point);
 
-    // Try forward direction
-    if (!startEdge.visited) {
-      const face = traceFace(nodes, edges, startEdgeIdx, true);
-      if (face && face.length >= 3) {
-        faces.push(face);
-      }
-    }
-
-    // Try reverse direction
-    if (!startEdge.visitedReverse) {
-      const face = traceFace(nodes, edges, startEdgeIdx, false);
-      if (face && face.length >= 3) {
-        faces.push(face);
-      }
-    }
+  const result: Point[][] = [];
+  if (poly1.length >= 3 && polygonArea(poly1) > 100) {
+    result.push(poly1);
+  }
+  if (poly2.length >= 3 && polygonArea(poly2) > 100) {
+    result.push(poly2);
   }
 
-  return faces;
-}
-
-/**
- * Trace a single face starting from an edge
- */
-function traceFace(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
-  startEdgeIdx: number,
-  forward: boolean
-): Point[] | null {
-  const edge = edges[startEdgeIdx];
-  const startNode = forward ? edge.nodeA : edge.nodeB;
-  const secondNode = forward ? edge.nodeB : edge.nodeA;
-
-  // Mark starting edge as visited
-  if (forward) {
-    edge.visited = true;
-  } else {
-    edge.visitedReverse = true;
-  }
-
-  const facePoints: Point[] = [nodes[startNode].point];
-  let currentNode = secondNode;
-  let prevNode = startNode;
-
-  const maxIterations = edges.length * 2;
-  let iterations = 0;
-
-  while (currentNode !== startNode && iterations < maxIterations) {
-    facePoints.push(nodes[currentNode].point);
-
-    const next = findNextEdge(nodes, edges, currentNode, prevNode);
-    if (!next) break;
-
-    // Mark edge as visited
-    const nextEdge = edges[next.edgeIdx];
-    if (nextEdge.nodeA === currentNode) {
-      nextEdge.visited = true;
-    } else {
-      nextEdge.visitedReverse = true;
-    }
-
-    prevNode = currentNode;
-    currentNode = next.nextNode;
-    iterations++;
-  }
-
-  if (currentNode !== startNode) {
-    return null; // Didn't close the loop
-  }
-
-  return facePoints;
+  return result.length > 0 ? result : [polygon];
 }
 
 /**
@@ -328,69 +212,54 @@ function traceFace(
 export function splitPolygonByLines(polygon: Point[], lines: Point[][]): Point[][] {
   console.log(`[PolygonClipper] Input: polygon with ${polygon.length} points, ${lines.length} lines`);
 
-  if (polygon.length < 3) return [polygon];
-
-  // Step 1: Collect all segments (polygon edges + clipped red lines)
-  const allSegments: [Point, Point][] = [];
-
-  // Add polygon boundary edges
-  for (let i = 0; i < polygon.length; i++) {
-    const p1 = polygon[i];
-    const p2 = polygon[(i + 1) % polygon.length];
-    allSegments.push([p1, p2]);
-  }
-  console.log(`[PolygonClipper] Added ${polygon.length} polygon edges`);
-
-  // Add red lines clipped to polygon
-  let clippedCount = 0;
-  for (const line of lines) {
-    for (let i = 0; i < line.length - 1; i++) {
-      const clipped = clipSegmentToPolygon(line[i], line[i + 1], polygon);
-      if (clipped) {
-        allSegments.push(clipped);
-        clippedCount++;
-      }
-    }
-  }
-  console.log(`[PolygonClipper] Added ${clippedCount} clipped red line segments`);
-
-  if (clippedCount === 0) {
-    console.log('[PolygonClipper] No red lines inside polygon, returning original');
+  if (polygon.length < 3 || lines.length === 0) {
     return [polygon];
   }
 
-  // Step 2: Find all intersections and split segments
-  const splitSegments = findAllIntersections(allSegments);
-  console.log(`[PolygonClipper] After splitting: ${splitSegments.length} segments`);
+  // Calculate polygon bounds
+  const polyMinX = Math.min(...polygon.map(p => p.x));
+  const polyMaxX = Math.max(...polygon.map(p => p.x));
+  const polyMinY = Math.min(...polygon.map(p => p.y));
+  const polyMaxY = Math.max(...polygon.map(p => p.y));
+  const polyBounds = { minX: polyMinX, maxX: polyMaxX, minY: polyMinY, maxY: polyMaxY };
 
-  // Step 3: Build planar graph
-  const { nodes, edges } = buildGraph(splitSegments);
-  console.log(`[PolygonClipper] Graph: ${nodes.length} nodes, ${edges.length} edges`);
+  const polyWidth = polyMaxX - polyMinX;
+  const polyHeight = polyMaxY - polyMinY;
+  const extendDist = Math.max(polyWidth, polyHeight) * 2;
 
-  // Step 4: Extract faces
-  const faces = extractFaces(nodes, edges);
-  console.log(`[PolygonClipper] Found ${faces.length} faces`);
+  // Filter lines near polygon
+  const nearbyLines = lines.filter(line => lineNearPolygon(line, polyBounds));
+  console.log(`[PolygonClipper] Nearby lines: ${nearbyLines.length}`);
 
-  // Step 5: Filter valid faces (inside the original polygon, positive area)
-  const validFaces = faces.filter(face => {
-    const area = polygonArea(face);
-    if (area < 100) return false; // Too small
+  if (nearbyLines.length === 0) {
+    return [polygon];
+  }
 
-    // Check if centroid is inside original polygon
-    let cx = 0, cy = 0;
-    for (const p of face) {
-      cx += p.x;
-      cy += p.y;
+  // Merge connected segments
+  const mergedLines = mergeLineSegments(nearbyLines);
+  console.log(`[PolygonClipper] Merged into ${mergedLines.length} polylines`);
+
+  // Extend lines
+  const extendedLines = mergedLines.map(line => extendLine(line, extendDist));
+
+  // Split polygon iteratively
+  let currentPolygons = [polygon];
+
+  for (const line of extendedLines) {
+    const newPolygons: Point[][] = [];
+    for (const poly of currentPolygons) {
+      const split = splitPolygonBySingleLine(poly, line);
+      newPolygons.push(...split);
     }
-    cx /= face.length;
-    cy /= face.length;
+    currentPolygons = newPolygons;
+  }
 
-    return isPointInPolygon({ x: cx, y: cy }, polygon);
-  });
+  // Filter valid polygons
+  const result = currentPolygons.filter(p => p.length >= 3 && polygonArea(p) > 100);
 
-  console.log(`[PolygonClipper] Result: ${validFaces.length} valid sub-polygons`);
+  console.log(`[PolygonClipper] Result: ${result.length} sub-polygons`);
 
-  return validFaces.length > 0 ? validFaces : [polygon];
+  return result.length > 0 ? result : [polygon];
 }
 
 /**
@@ -402,7 +271,7 @@ export function polygonCollidesWithRoads(polygon: Point[], roads: Point[][]): bo
       const r1 = road[i];
       const r2 = road[i + 1];
 
-      // Check if road segment intersects polygon boundary
+      // Check intersection with polygon boundary
       for (let j = 0; j < polygon.length; j++) {
         const p1 = polygon[j];
         const p2 = polygon[(j + 1) % polygon.length];
@@ -411,7 +280,7 @@ export function polygonCollidesWithRoads(polygon: Point[], roads: Point[][]): bo
         }
       }
 
-      // Check if road segment midpoint is inside polygon
+      // Check if road midpoint is inside polygon
       const midpoint = { x: (r1.x + r2.x) / 2, y: (r1.y + r2.y) / 2 };
       if (isPointInPolygon(midpoint, polygon)) {
         return true;

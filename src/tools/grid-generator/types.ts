@@ -108,6 +108,8 @@ export interface GridGeneratorState {
   isProcessing: boolean;
   currentGlobalVariant: number;
   totalVariants: number;
+  generationZoom: number; // Zoom level at which grid was generated
+  generationCenter: Coordinate | null; // Map center at generation
 }
 
 // Configuration
