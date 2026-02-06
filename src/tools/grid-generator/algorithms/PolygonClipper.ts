@@ -14,6 +14,7 @@ import {
   isPointInPolygon,
   polygonArea
 } from './geometry';
+import polygonClipping from 'polygon-clipping';
 
 // Increased tolerance to handle tile boundary gaps from Martin
 const MERGE_TOLERANCE = 30; // pixels (increased for better tile gap handling)
@@ -261,16 +262,218 @@ export function splitPolygonByLines(polygon: Point[], lines: Point[][]): Point[]
 
   console.log(`[PolygonClipper] Result: ${result.length} sub-polygons`);
 
-  // TODO: Merge touching polygons - disabled for now as it causes issues
-  // The merge algorithm needs to be fixed to properly handle all cases
-  // if (result.length > 1) {
-  //   try {
-  //     const mergedPolygons = mergeTouchingPolygons(result);
-  //     ...
-  //   }
-  // }
+  // Merge touching polygons using polygon-clipping library
+  if (result.length > 1) {
+    try {
+      const mergedPolygons = mergeTouchingPolygons(result);
+      console.log(`[PolygonClipper] After merge: ${mergedPolygons.length} sub-polygons`);
+      if (mergedPolygons.length > 0) {
+        return mergedPolygons;
+      }
+    } catch (e) {
+      console.warn('[PolygonClipper] Merge failed, using original polygons:', e);
+    }
+  }
 
   return result.length > 0 ? result : [polygon];
+}
+
+/**
+ * Convert Point[] to polygon-clipping format [[[x,y], [x,y], ...]]
+ */
+function toClipperPolygon(poly: Point[]): polygonClipping.Polygon {
+  const ring: polygonClipping.Ring = poly.map(p => [p.x, p.y]);
+  // Close the ring if not closed
+  if (ring.length > 0) {
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      ring.push([first[0], first[1]]);
+    }
+  }
+  return [ring];
+}
+
+/**
+ * Convert polygon-clipping result back to Point[][]
+ */
+function fromClipperResult(multiPoly: polygonClipping.MultiPolygon): Point[][] {
+  const result: Point[][] = [];
+  for (const polygon of multiPoly) {
+    // Take only outer ring (first ring), ignore holes
+    const ring = polygon[0];
+    if (ring && ring.length >= 3) {
+      // Remove closing point if present
+      const points = ring.map(coord => ({ x: coord[0], y: coord[1] }));
+      if (points.length > 1) {
+        const first = points[0];
+        const last = points[points.length - 1];
+        if (first.x === last.x && first.y === last.y) {
+          points.pop();
+        }
+      }
+      if (points.length >= 3) {
+        result.push(points);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Check if two polygons share an edge (are touching)
+ */
+function polygonsShareEdge(poly1: Point[], poly2: Point[], tolerance = 5): boolean {
+  for (let i = 0; i < poly1.length; i++) {
+    const a1 = poly1[i];
+    const a2 = poly1[(i + 1) % poly1.length];
+
+    for (let j = 0; j < poly2.length; j++) {
+      const b1 = poly2[j];
+      const b2 = poly2[(j + 1) % poly2.length];
+
+      // Check if edges are collinear and overlapping
+      if (edgesOverlap(a1, a2, b1, b2, tolerance)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if two edges overlap (share a segment)
+ */
+function edgesOverlap(a1: Point, a2: Point, b1: Point, b2: Point, tolerance: number): boolean {
+  // Check if edges are parallel
+  const dx1 = a2.x - a1.x;
+  const dy1 = a2.y - a1.y;
+  const dx2 = b2.x - b1.x;
+  const dy2 = b2.y - b1.y;
+
+  const cross = Math.abs(dx1 * dy2 - dy1 * dx2);
+  const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+  const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+
+  if (len1 < 0.001 || len2 < 0.001) return false;
+
+  // Check parallelism
+  if (cross / (len1 * len2) > 0.1) return false;
+
+  // Check if b1 and b2 are close to line a1-a2
+  const distB1 = pointToSegmentDist(b1, a1, a2);
+  const distB2 = pointToSegmentDist(b2, a1, a2);
+
+  if (distB1 > tolerance && distB2 > tolerance) return false;
+
+  // Project b1, b2 onto line a1-a2 and check overlap
+  const t1 = projectOntoSegment(b1, a1, a2);
+  const t2 = projectOntoSegment(b2, a1, a2);
+  const tMin = Math.min(t1, t2);
+  const tMax = Math.max(t1, t2);
+
+  // Check if there's overlap with [0, 1]
+  return tMax > 0.01 && tMin < 0.99;
+}
+
+function pointToSegmentDist(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 0.001) return Math.hypot(p.x - a.x, p.y - a.y);
+
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+function projectOntoSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 < 0.001) return 0;
+  return ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+}
+
+/**
+ * Merge all touching polygons using polygon-clipping library
+ */
+function mergeTouchingPolygons(polygons: Point[][]): Point[][] {
+  if (polygons.length <= 1) return polygons;
+
+  console.log(`[PolygonClipper] Merging ${polygons.length} polygons...`);
+
+  // Build adjacency graph
+  const n = polygons.length;
+  const adj: Set<number>[] = Array.from({ length: n }, () => new Set());
+
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (polygonsShareEdge(polygons[i], polygons[j])) {
+        adj[i].add(j);
+        adj[j].add(i);
+      }
+    }
+  }
+
+  // Find connected components
+  const visited = new Set<number>();
+  const components: number[][] = [];
+
+  for (let i = 0; i < n; i++) {
+    if (visited.has(i)) continue;
+
+    const component: number[] = [];
+    const stack = [i];
+
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      if (visited.has(node)) continue;
+      visited.add(node);
+      component.push(node);
+
+      for (const neighbor of adj[node]) {
+        if (!visited.has(neighbor)) {
+          stack.push(neighbor);
+        }
+      }
+    }
+
+    components.push(component);
+  }
+
+  console.log(`[PolygonClipper] Found ${components.length} groups`);
+
+  // Merge each component using polygon-clipping union
+  const result: Point[][] = [];
+
+  for (const component of components) {
+    if (component.length === 1) {
+      result.push(polygons[component[0]]);
+      continue;
+    }
+
+    // Union all polygons in the component
+    try {
+      // Start with first polygon as MultiPolygon
+      let merged: polygonClipping.MultiPolygon = [toClipperPolygon(polygons[component[0]])];
+
+      for (let i = 1; i < component.length; i++) {
+        const poly: polygonClipping.MultiPolygon = [toClipperPolygon(polygons[component[i]])];
+        merged = polygonClipping.union(merged, poly);
+      }
+
+      const mergedPolygons = fromClipperResult(merged);
+      result.push(...mergedPolygons);
+    } catch (e) {
+      console.warn('[PolygonClipper] Component merge failed:', e);
+      // Fallback: keep original polygons
+      for (const idx of component) {
+        result.push(polygons[idx]);
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
